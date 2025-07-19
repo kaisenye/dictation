@@ -1,17 +1,16 @@
-# Meeting Helper
+# Romo
 
-A modern Electron app for Mac built with React, Vite, and Tailwind CSS to help you manage meetings more effectively with real-time AI transcription powered by Whisper.cpp and intelligent meeting assistance powered by Llama.cpp.
+A modern Electron app for Mac built with React, Vite, and Tailwind CSS featuring intelligent dictation with real-time AI transcription powered by Whisper.cpp and advanced post-processing powered by Llama.cpp.
 
 ## 🚀 Features
 
-- 📅 **Schedule Meetings** - Organize and plan your meetings efficiently
-- 🎤 **Real-time Transcription** - AI-powered speech-to-text using Whisper.cpp
-- 🤖 **AI Meeting Assistant** - Ask questions about meeting content using Llama.cpp
-- 📝 **Auto-Summarization** - AI-generated meeting summaries
-- 📝 **Take Notes** - Capture important points and action items
-- ⏱️ **Track Time** - Keep meetings on schedule and productive
-- 📊 **Analytics** - Review meeting insights and patterns
+- 🎤 **Real-time Dictation** - AI-powered speech-to-text using Whisper.cpp
+- 🤖 **Intelligent Post-processing** - Llama.cpp powered content organization and formatting
+- ⌨️ **Global Shortcuts** - Quick access with customizable keyboard shortcuts
+- 🍎 **macOS Native** - Menu bar integration with tray icon
+- 📝 **Use Case Detection** - Auto-detect and format content for different purposes
 - 🔒 **Privacy-First** - All AI processing happens locally on your device
+- 📋 **One-click Copy** - Instantly copy transcriptions to clipboard
 
 ## 🛠 Technology Stack
 
@@ -49,7 +48,7 @@ git --version     # Required for Whisper.cpp setup
 ### 1. Clone the Repository
 ```bash
 git clone <your-repo-url>
-cd meeting-helper-2
+cd romo
 ```
 
 ### 2. Install Dependencies
@@ -69,7 +68,7 @@ This will install all required dependencies including:
 # Setup Whisper.cpp for transcription
 npm run setup:whisper
 
-# Setup Llama.cpp for AI chat and summarization
+# Setup Llama.cpp for post-processing
 npm run setup:llama
 ```
 
@@ -180,13 +179,13 @@ npm run electron:pack
 - **High Performance** - 4-10x faster than cloud solutions
 - **Privacy-First** - No audio data sent to external servers
 - **Multiple Models** - Choose between speed and quality
-- **Real-time** - Live transcription during meetings
+- **Real-time** - Live transcription during dictation
 
 ### Supported Models
 - **tiny.en** - Fastest, good for real-time processing
 - **base.en** - Balanced speed and quality (default)
 - **small.en** - Better quality, slightly slower
-- **medium.en** - High quality for important meetings
+- **medium.en** - High quality for important dictations
 
 ### Audio Formats
 - **Input**: WAV, MP3, FLAC, OGG
@@ -194,135 +193,123 @@ npm run electron:pack
 - **Channels**: Mono (automatically converted)
 - **Quality**: 16-bit PCM
 
-## 🤖 AI Meeting Assistant Features
+## 🤖 AI Post-Processing Features
 
 ### Llama.cpp Integration
 - **Local Processing** - All AI inference happens on your device
 - **High Performance** - 4-10x faster than cloud solutions
-- **Privacy-First** - No conversation data sent to external servers
+- **Privacy-First** - No content data sent to external servers
 - **Multiple Models** - Choose between speed and quality
-- **Real-time** - Instant responses during meetings
+- **Real-time** - Instant post-processing after dictation
 
-### AI Chat Interface
-- **Contextual Q&A** - Ask questions about meeting content
-- **Conversation Memory** - AI remembers previous questions
-- **Smart Responses** - Understands meeting context and speakers
-- **Real-time Updates** - Works with live transcription
+### Use Case Detection & Formatting
+- **Email** - Professional email formatting with greetings and signatures
+- **Document** - Formal document structure with headers and formatting
+- **Note** - Personal notes with bullet points and organization
+- **Code** - Programming code with proper syntax and comments
+- **Meeting** - Meeting notes with action items and speaker identification
+- **Social Media** - Social media posts with appropriate tone and hashtags
+- **Creative Writing** - Creative content with enhanced flow and style
+- **Technical** - Technical documentation with proper terminology
+- **Casual** - Casual conversation with natural flow
 
-### Auto-Summarization
-- **Meeting Summaries** - AI-generated comprehensive summaries
-- **Key Points Extraction** - Identifies important discussion points
-- **Action Items** - Highlights tasks and decisions
-- **Automatic Generation** - Creates summaries when meetings end
+### Post-Processing Features
+- **Use case detection** - Auto-detect content type from transcription
+- **Formatting** - Apply appropriate formatting based on use case
+- **Grammar correction** - Fix common speech-to-text errors
+- **Structure organization** - Add proper paragraphs, lists, headers
+- **Tone adjustment** - Match appropriate tone for use case
+- **Content enhancement** - Expand abbreviations, add context
 
-### Supported Models
-- **TinyLlama** - Fastest, good for real-time chat (recommended)
-- **Phi-2** - Good balance of speed and quality
-- **Mistral 7B** - Better quality, slightly slower
-- **Llama 2 7B** - High quality for important meetings
+## ⌨️ Global Shortcuts
 
-### Use Cases
-- **Meeting Detail View**: Ask questions about completed meetings
-- **Live Meeting View**: Get real-time insights during meetings
-- **Summary Generation**: Automatic meeting summaries
-- **Context Understanding**: AI understands speaker roles and conversation flow
+### Default Shortcuts
+- `CmdOrCtrl+Shift+D` - Toggle dictation window
+- `CmdOrCtrl+Shift+S` - Stop dictation
+- `CmdOrCtrl+Shift+C` - Copy transcription
+- `CmdOrCtrl+Shift+H` - Show/hide app
 
-## ⌨️ Keyboard Shortcuts
-
-### macOS Native Shortcuts
-- `Cmd+Q` - Quit application
-- `Cmd+H` - Hide application
-- `Cmd+M` - Minimize window
-- `Cmd+W` - Close window
-- `Cmd+R` - Reload application
-
-### Custom App Shortcuts
-- `Cmd+N` - Start new meeting
-- `Cmd+O` - View past meetings
-- `Cmd+,` - Open preferences (if implemented)
+### Customization
+All shortcuts can be customized in the app settings.
 
 ## 📁 Project Structure
 
 ```
-meeting-helper-2/
+romo/
 ├── 📁 electron/                 # Electron main process files
 │   ├── main.js                  # Main Electron process
 │   ├── preload.js               # Secure IPC preload script
 │   └── 📁 services/             # Backend services
 │       ├── whisperCppService.js # Whisper.cpp integration
 │       └── llamaCppService.js   # Llama.cpp integration
-├── 📁 src/                      # React application source
-│   ├── App.jsx                  # Main React component
-│   ├── main.jsx                 # React entry point
-│   ├── index.css                # Tailwind CSS + custom styles
-│   └── 📁 components/           # React components
-│       ├── 📁 meeting/          # Meeting-related components
-│       └── 📁 ai/               # AI interface components
-│           └── AIChatInterface.jsx # AI chat component
-├── 📁 whisper.cpp/              # Whisper.cpp binaries and models
-│   ├── build/bin/               # Compiled binaries
-│   └── models/                  # AI models
-├── 📁 llama.cpp/                # Llama.cpp binaries and models
-│   ├── build/bin/               # Compiled binaries
-│   └── models/                  # AI models
-├── 📁 scripts/                  # Setup and utility scripts
-│   ├── setup-whisper-cpp.sh     # Whisper.cpp setup script
-│   └── setup-llama-cpp.sh       # Llama.cpp setup script
-├── 📁 public/                   # Static assets
-├── 📁 build/                    # Build assets (icons, etc.)
-├── 📁 dist/                     # Web build output
-├── 📁 dist-electron/            # Electron build output
-├── 📁 release/                  # Final app distributables
-├── index.html                   # HTML template
-├── vite.config.js               # Vite configuration
-├── tailwind.config.js           # Tailwind CSS configuration
-├── postcss.config.js            # PostCSS configuration
-├── package.json                 # Dependencies and scripts
-├── .gitignore                   # Git ignore rules
-├── README.md                    # This file
-└── WHISPER_CPP_MIGRATION.md     # Migration guide
+├── 📁 src/                      # React application
+│   ├── components/              # React components
+│   │   └── dictation/           # Dictation-specific components
+│   ├── stores/                  # State management (Zustand)
+│   ├── utils/                   # Utility functions
+│   └── App.jsx                  # Main React component
+├── 📁 scripts/                  # Setup and build scripts
+├── 📁 build/                    # Build assets and icons
+└── 📁 release/                  # Distribution builds
 ```
 
-## 🔒 Security & Privacy
+## 🎯 Use Cases
 
-This app follows Electron security best practices and prioritizes privacy:
+### Professional Use
+- **Email Composition** - Dictate professional emails with proper formatting
+- **Document Creation** - Create formal documents with structured content
+- **Meeting Notes** - Capture and organize meeting discussions
+- **Technical Documentation** - Generate technical docs with proper terminology
 
-- ✅ **Context Isolation** - Enabled for secure IPC
-- ✅ **Node Integration** - Disabled in renderer process
-- ✅ **Preload Scripts** - Secure API exposure
-- ✅ **External Links** - Handled safely
-- ✅ **Content Security Policy** - Ready for implementation
-- ✅ **Local AI Processing** - No audio data leaves your device
-- ✅ **No Cloud Dependencies** - Works completely offline
+### Personal Use
+- **Quick Notes** - Capture thoughts and ideas quickly
+- **Creative Writing** - Enhance creative content with AI assistance
+- **Social Media** - Create engaging social media posts
+- **Casual Communication** - Natural conversation transcription
 
-## 🐛 Troubleshooting
+## 🔒 Privacy & Security
 
-### Common Issues
+- **100% Local Processing** - All AI models run on your device
+- **No Cloud Dependencies** - No data sent to external servers
+- **No Persistent Storage** - Transcriptions are not stored permanently
+- **Secure IPC** - Secure communication between processes
+- **Permission Control** - Only microphone access required
 
-**1. "Module not found" errors**
-```bash
-# Clear node_modules and reinstall
-rm -rf node_modules package-lock.json
-npm install
-```
+## 🚀 Performance
 
-**2. "Port 5173 already in use"**
-```bash
-# Kill process using the port
-lsof -ti:5173 | xargs kill -9
-```
+### Targets
+- **Transcription latency**: < 500ms
+- **Post-processing latency**: < 2 seconds
+- **Memory usage**: < 200MB
+- **CPU usage**: < 15% during dictation
+- **Startup time**: < 3 seconds
 
-**3. Electron app doesn't start**
-```bash
-# Check if Vite server is running first
-npm run dev
-# Then in another terminal
-npm run electron
-```
+### Optimization
+- **Streaming transcription** - Real-time audio processing
+- **Parallel processing** - Whisper + Llama.cpp working together
+- **Memory management** - Efficient handling of long sessions
+- **Background processing** - Non-blocking UI updates
 
-**4. Build fails**
-```bash
-# Clear build cache
-rm -rf dist dist-electron
-npm run build:web
-```
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- **Whisper.cpp** - High-performance speech recognition
+- **Llama.cpp** - Efficient language model inference
+- **Electron** - Cross-platform desktop framework
+- **React** - Modern UI library
+- **Tailwind CSS** - Utility-first CSS framework
+
+---
+
+**Romo** - Intelligent dictation for the modern workflow.

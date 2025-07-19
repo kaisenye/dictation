@@ -1,7 +1,7 @@
 {
-  "name": "meeting-helper-2",
+  "name": "romo",
   "version": "1.0.0",
-  "description": "A meeting helper Electron app with React, Vite, and Tailwind CSS featuring real-time AI transcription powered by Whisper.cpp",
+  "description": "Romo - Intelligent dictation app with AI-powered transcription and post-processing",
   "main": "dist-electron/main.js",
   "homepage": "./",
   "scripts": {
@@ -24,22 +24,22 @@
     "react",
     "vite",
     "tailwindcss",
-    "meeting",
-    "helper",
-    "mac",
-    "whisper",
+    "dictation",
     "transcription",
     "ai",
-    "speech-to-text"
+    "speech-to-text",
+    "whisper",
+    "llama",
+    "macos"
   ],
   "author": "Your Name",
   "license": "MIT",
   "dependencies": {
     "date-fns": "^4.1.0",
     "lucide-react": "^0.263.1",
+    "node-fetch": "^3.3.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "sqlite3": "^5.1.7",
     "zustand": "^5.0.5"
   },
   "devDependencies": {
@@ -59,8 +59,8 @@
     "wait-on": "^7.0.1"
   },
   "build": {
-    "appId": "com.meetinghelper.app",
-    "productName": "Meeting Helper",
+    "appId": "com.romo.app",
+    "productName": "Romo",
     "directories": {
       "output": "release/${version}"
     },

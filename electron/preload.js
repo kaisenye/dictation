@@ -6,50 +6,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
   versions: process.versions,
   
-  // Database initialization
-  initializeDatabase: () => ipcRenderer.invoke('initializeDatabase'),
-  
-  // Database utilities
-  getDbPath: () => ipcRenderer.invoke('get-user-data-path').then(userDataPath => 
-    userDataPath + '/meeting-helper.db'
-  ),
-  
-  getSchemaPath: () => ipcRenderer.invoke('get-app-path').then(appPath => 
-    appPath + '/electron/database/schema.sql'
-  ),
-
-  // Meeting operations
-  createMeeting: (meetingData) => ipcRenderer.invoke('createMeeting', meetingData),
-  getMeeting: (id) => ipcRenderer.invoke('getMeeting', id),
-  getAllMeetings: (limit, offset) => ipcRenderer.invoke('getAllMeetings', limit, offset),
-  updateMeeting: (id, updates) => ipcRenderer.invoke('updateMeeting', id, updates),
-  deleteMeeting: (id) => ipcRenderer.invoke('deleteMeeting', id),
-  endMeeting: (id, endTime, duration) => ipcRenderer.invoke('endMeeting', id, endTime, duration),
-
-  // Transcript operations
-  addTranscript: (transcriptData) => ipcRenderer.invoke('addTranscript', transcriptData),
-  getTranscripts: (meetingId) => ipcRenderer.invoke('getTranscripts', meetingId),
-  searchTranscripts: (query, meetingId) => ipcRenderer.invoke('searchTranscripts', query, meetingId),
-
-  // Speaker operations
-  addOrUpdateSpeaker: (speakerData) => ipcRenderer.invoke('addOrUpdateSpeaker', speakerData),
-  getSpeakers: (meetingId) => ipcRenderer.invoke('getSpeakers', meetingId),
-  updateSpeakerName: (speakerId, meetingId, displayName) => ipcRenderer.invoke('updateSpeakerName', speakerId, meetingId, displayName),
-
-  // Settings operations
-  getSetting: (key) => ipcRenderer.invoke('getSetting', key),
-  setSetting: (key, value) => ipcRenderer.invoke('setSetting', key, value),
-
-  // Analytics and statistics
-  getMeetingStats: () => ipcRenderer.invoke('getMeetingStats'),
-
-  // Database maintenance
-  vacuum: () => ipcRenderer.invoke('vacuum'),
-  
-  // File system operations
-  readFile: (path) => ipcRenderer.invoke('read-file', path),
-  writeFile: (path, data) => ipcRenderer.invoke('write-file', path, data),
-  
   // AI Service operations
   aiInitialize: () => ipcRenderer.invoke('ai-initialize'),
   aiProcessChunk: (audioBuffer, sampleRate) => ipcRenderer.invoke('ai-process-chunk', audioBuffer, sampleRate),
@@ -74,6 +30,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimizeWindow: () => ipcRenderer.invoke('minimize-window'),
   maximizeWindow: () => ipcRenderer.invoke('maximize-window'),
   closeWindow: () => ipcRenderer.invoke('close-window'),
+  
+  // Global shortcut events
+  onGlobalShortcutStopDictation: (callback) => ipcRenderer.on('global-shortcut-stop-dictation', callback),
+  onGlobalShortcutCopyTranscription: (callback) => ipcRenderer.on('global-shortcut-copy-transcription', callback),
+  onTrayStartDictation: (callback) => ipcRenderer.on('tray-start-dictation', callback),
+  onTrayOpenSettings: (callback) => ipcRenderer.on('tray-open-settings', callback),
   
   // Notifications
   showNotification: (title, body) => ipcRenderer.invoke('show-notification', title, body)

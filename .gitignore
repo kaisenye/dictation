@@ -133,6 +133,5 @@ llama.cpp/
 *.bin.gz
 *.bin.gz.part
 
-
 # Cursor
-.cursor
+cursor/
