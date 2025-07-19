@@ -1,0 +1,90 @@
+{
+  "name": "meeting-helper-2",
+  "version": "1.0.0",
+  "description": "A meeting helper Electron app with React, Vite, and Tailwind CSS featuring real-time AI transcription powered by Whisper.cpp",
+  "main": "dist-electron/main.js",
+  "homepage": "./",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && electron-builder",
+    "build:web": "vite build",
+    "build:electron": "electron-builder",
+    "electron": "wait-on tcp:5173 && cross-env IS_DEV=true electron .",
+    "electron:pack": "electron-builder --dir",
+    "electron:dist": "electron-builder",
+    "electron:dev": "concurrently \"npm run dev\" \"npm run electron\"",
+    "preview": "vite preview",
+    "setup:whisper": "bash scripts/setup-whisper-cpp.sh",
+    "setup:llama": "bash scripts/setup-llama-cpp.sh",
+    "verify:whisper": "bash scripts/verify-setup.sh",
+    "postinstall": "echo 'Run npm run setup:whisper to setup Whisper.cpp and npm run setup:llama to setup Llama.cpp'"
+  },
+  "keywords": [
+    "electron",
+    "react",
+    "vite",
+    "tailwindcss",
+    "meeting",
+    "helper",
+    "mac",
+    "whisper",
+    "transcription",
+    "ai",
+    "speech-to-text"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "lucide-react": "^0.263.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "sqlite3": "^5.1.7",
+    "zustand": "^5.0.5"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7",
+    "@vitejs/plugin-react": "^4.0.3",
+    "autoprefixer": "^10.4.14",
+    "concurrently": "^8.2.0",
+    "cross-env": "^7.0.3",
+    "electron": "^25.3.1",
+    "electron-builder": "^24.6.3",
+    "postcss": "^8.4.27",
+    "tailwindcss": "^3.3.3",
+    "vite": "^4.4.5",
+    "vite-plugin-electron": "^0.11.2",
+    "vite-plugin-electron-renderer": "^0.14.5",
+    "wait-on": "^7.0.1"
+  },
+  "build": {
+    "appId": "com.meetinghelper.app",
+    "productName": "Meeting Helper",
+    "directories": {
+      "output": "release/${version}"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "icon": "build/icon.ico"
+    },
+    "linux": {
+      "icon": "build/icon.png"
+    }
+  }
+}
