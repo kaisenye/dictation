@@ -16,6 +16,10 @@ const useAudioRecording = () => {
   const totalProcessedTimeRef = useRef(0)
   const transcriptionBufferRef = useRef('') // Buffer for accumulating transcription
 
+  // Track processed audio to prevent duplicates
+  const processedAudioLengthRef = useRef(0)
+  const lastProcessedTextRef = useRef('')
+
   // Audio level monitoring with improved sensitivity
   const updateAudioLevel = useCallback(() => {
     if (analyserRef.current) {
@@ -61,32 +65,83 @@ const useAudioRecording = () => {
     return hasSpeechDetected
   }, [])
 
-  // Update transcription in the store
+  // Update transcription with deduplication
   const updateTranscription = useCallback((text) => {
-    // Accumulate transcription text
-    transcriptionBufferRef.current += text + ' '
+    const newText = text.trim()
+
+    // Skip if text is empty or already processed
+    if (!newText || newText === lastProcessedTextRef.current) {
+      return
+    }
+
+    // Add new text with proper spacing
+    if (transcriptionBufferRef.current) {
+      transcriptionBufferRef.current += ' ' + newText
+    } else {
+      transcriptionBufferRef.current = newText
+    }
 
     // Update the dictation store
     if (window.useDictationStore) {
       window.useDictationStore.getState().updateTranscription(transcriptionBufferRef.current.trim())
     }
+
+    // Track last processed text
+    lastProcessedTextRef.current = newText
   }, [])
 
-  // Start recording
+  // Improved audio processing with non-overlapping chunks
+  const processAudioChunk = useCallback(
+    async (audioData, sampleRate) => {
+      try {
+        if (window.electronAPI) {
+          const status = await window.electronAPI.aiGetStatus()
+          if (!status.initialized) {
+            const initResult = await window.electronAPI.aiInitialize()
+            if (!initResult.success) {
+              throw new Error('Failed to initialize AI service: ' + initResult.error)
+            }
+          }
+
+          setIsProcessing(true)
+
+          const wavBuffer = createWavBuffer(audioData, sampleRate)
+          const uint8Array = new Uint8Array(wavBuffer)
+          const hexString = Array.from(uint8Array)
+            .map((byte) => byte.toString(16).padStart(2, '0'))
+            .join('')
+
+          const result = await window.electronAPI.processAudioChunk(hexString, sampleRate)
+
+          if (result && result.success && result.result && result.result.text) {
+            const text = result.result.text.trim()
+            if (text && text !== '[BLANK_AUDIO]' && text.length > 0) {
+              updateTranscription(text)
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error processing audio chunk:', err)
+        setError(`Audio processing error: ${err.message}`)
+      } finally {
+        setIsProcessing(false)
+      }
+    },
+    [updateTranscription]
+  )
+
+  // Start recording with improved logic
   const startRecording = useCallback(async () => {
     try {
-      // Prevent starting if already recording
       if (isRecording) {
         console.warn('Recording is already active')
         return
       }
 
       setError(null)
-
-      // Reset transcription buffer
       transcriptionBufferRef.current = ''
-
-      // Initialize timestamp tracking
+      lastProcessedTextRef.current = ''
+      processedAudioLengthRef.current = 0
       recordingStartTimeRef.current = Date.now()
       totalProcessedTimeRef.current = 0
 
@@ -128,87 +183,37 @@ const useAudioRecording = () => {
       mediaRecorderRef.current = mediaRecorder
       chunksRef.current = []
 
-      // For real-time processing, we'll use a different approach
-      // Set up ScriptProcessorNode for raw audio data
-      const bufferSize = 4096
-      const processor = audioContextRef.current.createScriptProcessor(bufferSize, 1, 1)
+      // Improved audio processing with non-overlapping chunks
+      const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1)
       let audioBuffer = []
       let lastProcessTime = Date.now()
-      let consecutiveSilenceChunks = 0
-      const maxSilenceChunks = 3 // Allow up to 3 consecutive silent chunks
+      const chunkSize = 64000 // 4 seconds at 16kHz (non-overlapping) - increased from 2 seconds for better context
+      const processInterval = 4000 // Process every 4 seconds - increased from 2 seconds
 
       processor.onaudioprocess = async (event) => {
-        const inputBuffer = event.inputBuffer
-        const inputData = inputBuffer.getChannelData(0)
-
-        // Collect audio data
+        const inputData = event.inputBuffer.getChannelData(0)
         audioBuffer.push(...inputData)
 
-        // Process every 3 seconds of audio (48000 samples at 16kHz) - longer chunks for better context
-        if (audioBuffer.length >= 48000) {
+        // Process non-overlapping chunks
+        if (audioBuffer.length >= chunkSize) {
           const now = Date.now()
-          if (now - lastProcessTime >= 2000) {
-            // Minimum 2 second interval
+          if (now - lastProcessTime >= processInterval) {
             lastProcessTime = now
 
-            // Check if this chunk contains speech
-            const currentChunk = audioBuffer.slice(-48000)
+            // Take exactly chunkSize samples (non-overlapping)
+            const currentChunk = audioBuffer.slice(0, chunkSize)
+
+            // Check for speech in this chunk
             const hasSpeechInChunk = hasSpeech(currentChunk)
 
             if (hasSpeechInChunk) {
-              consecutiveSilenceChunks = 0 // Reset silence counter
-            } else {
-              consecutiveSilenceChunks++
+              await processAudioChunk(currentChunk, 16000)
+              processedAudioLengthRef.current += chunkSize
             }
 
-            // Only process if we have speech or haven't had too many silent chunks
-            if (hasSpeechInChunk || consecutiveSilenceChunks <= maxSilenceChunks) {
-              try {
-                // Check if AI service is initialized first
-                if (window.electronAPI) {
-                  const status = await window.electronAPI.aiGetStatus()
-                  if (!status.initialized) {
-                    const initResult = await window.electronAPI.aiInitialize()
-                    if (!initResult.success) {
-                      throw new Error('Failed to initialize AI service: ' + initResult.error)
-                    }
-                  }
-
-                  setIsProcessing(true)
-
-                  // Use the full 3-second chunk for better context
-                  const wavBuffer = createWavBuffer(currentChunk, 16000)
-                  const uint8Array = new Uint8Array(wavBuffer)
-                  const hexString = Array.from(uint8Array)
-                    .map((byte) => byte.toString(16).padStart(2, '0'))
-                    .join('')
-
-                  const result = await window.electronAPI.processAudioChunk(hexString, 16000)
-
-                  if (result && result.success && result.result && result.result.text) {
-                    // Only update transcription if we got meaningful text (not just blank audio)
-                    const text = result.result.text.trim()
-                    if (text && text !== '[BLANK_AUDIO]' && text.length > 0) {
-                      // Update transcription in the store (no refinement during recording)
-                      updateTranscription(result.result.text)
-                    }
-                  }
-
-                  // Update total processed time based on actual audio chunk duration
-                  // Each chunk is 3 seconds (48000 samples at 16kHz)
-                  totalProcessedTimeRef.current += 3
-                }
-              } catch (err) {
-                console.error('Error processing audio chunk:', err)
-                setError(`Audio processing error: ${err.message}`)
-              } finally {
-                setIsProcessing(false)
-              }
-            }
+            // Remove processed audio (non-overlapping approach)
+            audioBuffer = audioBuffer.slice(chunkSize)
           }
-
-          // Keep only the last 3 seconds of audio data for context
-          audioBuffer = audioBuffer.slice(-48000)
         }
       }
 
@@ -235,7 +240,7 @@ const useAudioRecording = () => {
       console.error('Error starting recording:', err)
       setError(err.message)
     }
-  }, [updateAudioLevel, updateTranscription, hasSpeech, isRecording])
+  }, [updateAudioLevel, processAudioChunk, hasSpeech, isRecording])
 
   // Helper function to create WAV buffer from float32 audio data
   const createWavBuffer = (audioData, sampleRate) => {
@@ -358,43 +363,32 @@ const useAudioRecording = () => {
 
     try {
       // Final AI refinement of complete transcription
-      try {
-        if (window.electronAPI && window.electronAPI.llamaGetStatus) {
+      let finalText = transcriptionBufferRef.current.trim()
+      if (window.electronAPI && window.electronAPI.llamaGetStatus && finalText) {
+        try {
           const llamaStatus = await window.electronAPI.llamaGetStatus()
           if (llamaStatus.success && llamaStatus.initialized) {
-            const currentTranscription = transcriptionBufferRef.current.trim()
-            if (currentTranscription) {
-              const finalRefinePrompt = `
-                  You are a writing assistant. 
-                  Clean up the following voice transcription by correcting grammar, 
-                  punctuation, and formatting. Preserve the speaker’s intent and tone. 
-                  Return ONLY the revised text—no explanations, no headings, and no comments.
-                   The output should be ready to copy into an email, website inputs, document, or message:
-                  "${currentTranscription}"`
-              const finalRefinedResult = await window.electronAPI.llamaAnswerQuestion(
-                finalRefinePrompt,
-                meetingId,
-                [],
-                []
-              )
-              if (finalRefinedResult.success && finalRefinedResult.answer) {
-                // Replace the transcription with refined version
-                if (window.useDictationStore) {
-                  window.useDictationStore.getState().updateTranscription(finalRefinedResult.answer)
-                  window.useDictationStore.getState().setProcessedTranscription('')
-                }
-              }
+            const prompt = `Clean up the following voice transcription by correcting grammar, punctuation, and formatting. Return ONLY the revised text—no explanations, no headings, and no comments:\n"${finalText}"`
+            const result = await window.electronAPI.llamaAnswerQuestion(prompt, meetingId, [], [])
+            // Only use the AI result if it's not empty and not just the prompt
+            if (result.success && result.answer && result.answer.trim() && !result.answer.includes(prompt)) {
+              finalText = result.answer.trim()
             }
           }
+        } catch (finalRefineError) {
+          console.warn('Final AI refinement failed:', finalRefineError.message)
         }
-      } catch (finalRefineError) {
-        console.warn('Final AI refinement failed:', finalRefineError.message)
+      }
+
+      // Update the store with the final text
+      if (window.useDictationStore) {
+        window.useDictationStore.getState().updateTranscription(finalText)
+        window.useDictationStore.getState().setProcessedTranscription('')
       }
 
       // Clear chunks since transcription was saved live
       chunksRef.current = []
 
-      // Return success since transcription was already saved during recording
       return { success: true, result: { text: 'Transcription saved during recording' } }
     } catch (err) {
       console.error('Error completing recording:', err)

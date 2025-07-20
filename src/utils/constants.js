@@ -115,7 +115,7 @@ export const DEFAULT_SETTINGS = {
 export const AUDIO_CONFIG = {
   SAMPLE_RATE: 16000,
   BUFFER_SIZE: 1024,
-  CHUNK_DURATION: 5, // seconds
+  CHUNK_DURATION: 4, // seconds - increased from 2 for better context awareness
   SILENCE_THRESHOLD: 0.01,
   MIN_SPEECH_DURATION: 0.5, // seconds
 }
