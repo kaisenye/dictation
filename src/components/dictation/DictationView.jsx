@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { Mic, MicOff, Copy, Settings, X, Check } from 'lucide-react'
 import useDictationStore from '../../stores/dictationStore'
 import useAudioRecording from '../../hooks/useAudioRecording'
@@ -33,61 +33,104 @@ const DictationView = () => {
   // Copy button state
   const [copied, setCopied] = useState(false)
 
-  // Handle global shortcuts
+  // Ref to track if we're currently handling a toggle to prevent double-triggers
+  const isHandlingToggleRef = useRef(false)
+
+  // Ref to track the latest recording state to prevent stale closures
+  const recordingStateRef = useRef(isRecording)
+
+  // Update the ref whenever isRecording changes
   useEffect(() => {
-    if (window.electronAPI) {
-      const handleStopDictation = () => {
-        if (isRecording) {
-          handleStopRecording()
-        }
-      }
-
-      const handleCopyTranscription = () => {
-        copyToClipboard()
-      }
-
-      window.electronAPI.onGlobalShortcutStopDictation(handleStopDictation)
-      window.electronAPI.onGlobalShortcutCopyTranscription(handleCopyTranscription)
-
-      return () => {
-        // Cleanup listeners if needed
-      }
-    }
+    recordingStateRef.current = isRecording
   }, [isRecording])
 
-  const copyToClipboard = async () => {
-    const textToCopy = getTranscriptionToCopy()
-    if (textToCopy) {
-      try {
-        await navigator.clipboard.writeText(textToCopy)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000) // Reset after 2 seconds
-        console.log('Transcription copied to clipboard')
-      } catch (error) {
-        console.error('Failed to copy to clipboard:', error)
-      }
-    }
-  }
-
-  const handleStartRecording = async () => {
+  // Stable callback functions using useCallback
+  const handleStartRecording = useCallback(async () => {
     try {
       await startRecording()
     } catch (error) {
       console.error('Failed to start recording:', error)
       useDictationStore.getState().setError('Failed to access microphone')
     }
-  }
+  }, [startRecording])
 
-  const handleStopRecording = async () => {
+  const handleStopRecording = useCallback(async () => {
     try {
       await stopRecording()
+
       // Save the recording (this will trigger final processing)
       await saveRecording('dictation-session')
     } catch (error) {
       console.error('Failed to stop recording:', error)
-      useDictationStore.getState().setError('Failed to stop recording')
+      useDictationStore.getState().setError(`Failed to stop recording: ${error.message}`)
     }
-  }
+  }, [stopRecording, saveRecording])
+
+  const copyToClipboard = useCallback(async () => {
+    const textToCopy = getTranscriptionToCopy()
+    if (textToCopy) {
+      try {
+        await navigator.clipboard.writeText(textToCopy)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000) // Reset after 2 seconds
+      } catch (error) {
+        console.error('Failed to copy to clipboard:', error)
+      }
+    }
+  }, [getTranscriptionToCopy])
+
+  // Main toggle handler with debouncing
+  const handleToggleDictation = useCallback(async () => {
+    // Prevent multiple rapid triggers
+    if (isHandlingToggleRef.current) {
+      return
+    }
+
+    isHandlingToggleRef.current = true
+
+    try {
+      // Use the ref to get the current state instead of the stale closure
+      const currentlyRecording = recordingStateRef.current
+
+      if (currentlyRecording) {
+        await handleStopRecording()
+        // Add a small delay after stopping to ensure cleanup is complete
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      } else {
+        await handleStartRecording()
+      }
+    } catch (error) {
+      console.error('Error in toggle dictation:', error)
+    } finally {
+      // Reset the flag after a short delay to prevent rapid re-triggers
+      setTimeout(() => {
+        isHandlingToggleRef.current = false
+      }, 500)
+    }
+  }, [handleStartRecording, handleStopRecording]) // Remove isRecording from dependencies
+
+  // Set up global shortcuts once on mount
+  useEffect(() => {
+    if (!window.electronAPI) {
+      console.warn('electronAPI not available')
+      return
+    }
+
+    // Set up event listeners
+    window.electronAPI.onGlobalShortcutToggleDictation((...args) => {
+      handleToggleDictation()
+    })
+
+    window.electronAPI.onGlobalShortcutCopyTranscription((...args) => {
+      copyToClipboard()
+    })
+
+    // Cleanup function
+    return () => {
+      // Note: In a real implementation, you might want to remove listeners
+      // but the current electronAPI doesn't expose removeListener methods
+    }
+  }, [handleToggleDictation, copyToClipboard]) // Include the callbacks as dependencies
 
   const handleClose = () => {
     if (window.electronAPI && window.electronAPI.closeWindow) {
@@ -111,15 +154,15 @@ const DictationView = () => {
     <div className="h-screen flex flex-col bg-gray-800">
       {/* Header - Simplified draggable area */}
       <div
-        className="h-8 bg-gray-800 cursor-move hover:bg-gray-700 transition-colors"
+        className="h-8 bg-gray-800 cursor-move hover:bg-gray-700 transition-colors flex-shrink-0"
         style={{ WebkitAppRegion: 'drag' }}
         title="Drag to move window"
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col p-4">
+      <div className="flex-1 flex flex-col p-4 min-h-0">
         {/* Transcription Display */}
-        <div className="flex-1 bg-gray-800 rounded-lg border border-gray-600 mb-4">
+        <div className="flex-1 min-h-0 bg-gray-800 rounded-lg border border-gray-600 mb-4">
           <TranscriptionDisplay
             transcription={transcription}
             processedTranscription={processedTranscription}
@@ -130,7 +173,7 @@ const DictationView = () => {
         </div>
 
         {/* Controls and Stats */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-shrink-0">
           <DictationControls isRecording={isRecording} onStart={handleStartRecording} onStop={handleStopRecording} />
 
           <div className="flex items-center space-x-4 text-sm text-gray-300">
@@ -159,7 +202,7 @@ const DictationView = () => {
 
       {/* Error Display */}
       {error && (
-        <div className="bg-red-900 border-t border-red-700 px-4 py-3">
+        <div className="bg-red-900 border-t border-red-700 px-4 py-3 flex-shrink-0">
           <div className="flex items-center justify-between">
             <span className="text-red-200 text-sm">{error}</span>
             <button onClick={clearError} className="text-red-300 hover:text-red-100 transition-colors">

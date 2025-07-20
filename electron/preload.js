@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Global shortcut events
   onGlobalShortcutStopDictation: (callback) => ipcRenderer.on('global-shortcut-stop-dictation', callback),
+  onGlobalShortcutToggleDictation: (callback) => ipcRenderer.on('global-shortcut-toggle-dictation', callback),
   onGlobalShortcutCopyTranscription: (callback) => ipcRenderer.on('global-shortcut-copy-transcription', callback),
   onTrayStartDictation: (callback) => ipcRenderer.on('tray-start-dictation', callback),
   onTrayOpenSettings: (callback) => ipcRenderer.on('tray-open-settings', callback),

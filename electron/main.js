@@ -738,15 +738,23 @@ function registerGlobalShortcuts() {
     console.log('Failed to register CmdOrCtrl+Shift+D shortcut')
   }
 
-  // Stop dictation
-  const stopSuccess = globalShortcut.register('CmdOrCtrl+Shift+S', () => {
-    console.log('Global shortcut CmdOrCtrl+Shift+S pressed')
+  // Toggle dictation recording (start/stop)
+  const recordingToggleSuccess = globalShortcut.register('CmdOrCtrl+Shift+S', () => {
+    console.log('=== GLOBAL SHORTCUT CmdOrCtrl+Shift+S PRESSED ===')
+    console.log('Main window exists:', !!mainWindow)
+    console.log('Main window visible:', mainWindow?.isVisible())
+    console.log('Main window destroyed:', mainWindow?.isDestroyed())
+
     if (mainWindow) {
-      mainWindow.webContents.send('global-shortcut-stop-dictation')
+      console.log('Sending global-shortcut-toggle-dictation event to renderer...')
+      mainWindow.webContents.send('global-shortcut-toggle-dictation')
+      console.log('Event sent successfully')
+    } else {
+      console.log('Main window is null, cannot send event')
     }
   })
 
-  if (!stopSuccess) {
+  if (!recordingToggleSuccess) {
     console.log('Failed to register CmdOrCtrl+Shift+S shortcut')
   }
 

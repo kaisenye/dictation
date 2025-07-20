@@ -123,7 +123,7 @@ export const AUDIO_CONFIG = {
 // Global Shortcuts
 export const GLOBAL_SHORTCUTS = {
   TOGGLE_DICTATION: 'CmdOrCtrl+Shift+D',
-  STOP_DICTATION: 'CmdOrCtrl+Shift+S',
+  TOGGLE_RECORDING: 'CmdOrCtrl+Shift+S',
   COPY_TRANSCRIPTION: 'CmdOrCtrl+Shift+C',
   SHOW_HIDE_APP: 'CmdOrCtrl+Shift+H',
 }
