@@ -1,10 +1,14 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 
 const useAudioRecording = () => {
+  console.log('=== useAudioRecording hook initialized ===')
+  
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState(null)
   const [audioLevel, setAudioLevel] = useState(0)
+  
+  console.log('=== Hook state initialized ===', { isRecording, isProcessing, error, audioLevel })
 
   const mediaRecorderRef = useRef(null)
   const streamRef = useRef(null)
@@ -13,12 +17,10 @@ const useAudioRecording = () => {
   const animationFrameRef = useRef(null)
   const chunksRef = useRef([])
   const recordingStartTimeRef = useRef(null)
-  const totalProcessedTimeRef = useRef(0)
-  const transcriptionBufferRef = useRef('') // Buffer for accumulating transcription
-
-  // Track processed audio to prevent duplicates
-  const processedAudioLengthRef = useRef(0)
+  const allAudioDataRef = useRef([]) // Store all audio data for final processing
   const lastProcessedTextRef = useRef('')
+  const transcriptionBufferRef = useRef('')
+  const processedAudioLengthRef = useRef(0)
 
   // Audio level monitoring with improved sensitivity
   const updateAudioLevel = useCallback(() => {
@@ -55,83 +57,15 @@ const useAudioRecording = () => {
 
     // Threshold for speech detection (adjust as needed)
     const speechThreshold = 0.01
-    const hasSpeechDetected = rms > speechThreshold
-
-    // Debug logging for first few chunks
-    if (Math.random() < 0.1) {
-      // Log 10% of the time to avoid spam
-    }
-
-    return hasSpeechDetected
+    return rms > speechThreshold
   }, [])
 
-  // Update transcription with deduplication
-  const updateTranscription = useCallback((text) => {
-    const newText = text.trim()
-
-    // Skip if text is empty or already processed
-    if (!newText || newText === lastProcessedTextRef.current) {
-      return
-    }
-
-    // Add new text with proper spacing
-    if (transcriptionBufferRef.current) {
-      transcriptionBufferRef.current += ' ' + newText
-    } else {
-      transcriptionBufferRef.current = newText
-    }
-
-    // Update the dictation store
-    if (window.useDictationStore) {
-      window.useDictationStore.getState().updateTranscription(transcriptionBufferRef.current.trim())
-    }
-
-    // Track last processed text
-    lastProcessedTextRef.current = newText
-  }, [])
-
-  // Improved audio processing with non-overlapping chunks
-  const processAudioChunk = useCallback(
-    async (audioData, sampleRate) => {
-      try {
-        if (window.electronAPI) {
-          const status = await window.electronAPI.aiGetStatus()
-          if (!status.initialized) {
-            const initResult = await window.electronAPI.aiInitialize()
-            if (!initResult.success) {
-              throw new Error('Failed to initialize AI service: ' + initResult.error)
-            }
-          }
-
-          setIsProcessing(true)
-
-          const wavBuffer = createWavBuffer(audioData, sampleRate)
-          const uint8Array = new Uint8Array(wavBuffer)
-          const hexString = Array.from(uint8Array)
-            .map((byte) => byte.toString(16).padStart(2, '0'))
-            .join('')
-
-          const result = await window.electronAPI.processAudioChunk(hexString, sampleRate)
-
-          if (result && result.success && result.result && result.result.text) {
-            const text = result.result.text.trim()
-            if (text && text !== '[BLANK_AUDIO]' && text.length > 0) {
-              updateTranscription(text)
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Error processing audio chunk:', err)
-        setError(`Audio processing error: ${err.message}`)
-      } finally {
-        setIsProcessing(false)
-      }
-    },
-    [updateTranscription]
-  )
+  // No longer needed - we'll process all audio at once at the end
 
   // Start recording with improved logic
   const startRecording = useCallback(async () => {
+    console.log('=== useAudioRecording startRecording called ===')
+    console.log('Current isRecording state:', isRecording)
     try {
       if (isRecording) {
         console.warn('Recording is already active')
@@ -139,12 +73,10 @@ const useAudioRecording = () => {
       }
 
       setError(null)
-      transcriptionBufferRef.current = ''
-      lastProcessedTextRef.current = ''
-      processedAudioLengthRef.current = 0
+      allAudioDataRef.current = []
       recordingStartTimeRef.current = Date.now()
-      totalProcessedTimeRef.current = 0
 
+      console.log('Requesting microphone access...')
       // Request microphone access with better audio settings
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -156,6 +88,7 @@ const useAudioRecording = () => {
           volume: 1.0,
         },
       })
+      console.log('Microphone access granted successfully')
 
       streamRef.current = stream
 
@@ -183,38 +116,13 @@ const useAudioRecording = () => {
       mediaRecorderRef.current = mediaRecorder
       chunksRef.current = []
 
-      // Improved audio processing with non-overlapping chunks
+      // Simple audio collection - store all audio data for final processing
       const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1)
-      let audioBuffer = []
-      let lastProcessTime = Date.now()
-      const chunkSize = 64000 // 4 seconds at 16kHz (non-overlapping) - increased from 2 seconds for better context
-      const processInterval = 4000 // Process every 4 seconds - increased from 2 seconds
-
-      processor.onaudioprocess = async (event) => {
+      
+      processor.onaudioprocess = (event) => {
         const inputData = event.inputBuffer.getChannelData(0)
-        audioBuffer.push(...inputData)
-
-        // Process non-overlapping chunks
-        if (audioBuffer.length >= chunkSize) {
-          const now = Date.now()
-          if (now - lastProcessTime >= processInterval) {
-            lastProcessTime = now
-
-            // Take exactly chunkSize samples (non-overlapping)
-            const currentChunk = audioBuffer.slice(0, chunkSize)
-
-            // Check for speech in this chunk
-            const hasSpeechInChunk = hasSpeech(currentChunk)
-
-            if (hasSpeechInChunk) {
-              await processAudioChunk(currentChunk, 16000)
-              processedAudioLengthRef.current += chunkSize
-            }
-
-            // Remove processed audio (non-overlapping approach)
-            audioBuffer = audioBuffer.slice(chunkSize)
-          }
-        }
+        // Store all audio data for final processing
+        allAudioDataRef.current.push(...inputData)
       }
 
       source.connect(processor)
@@ -235,12 +143,14 @@ const useAudioRecording = () => {
 
       // Start recording with longer chunks for full recording
       mediaRecorder.start(10000) // 10 second chunks for full recording
+      console.log('Setting isRecording to true')
       setIsRecording(true)
+      console.log('Recording started successfully!')
     } catch (err) {
       console.error('Error starting recording:', err)
       setError(err.message)
     }
-  }, [updateAudioLevel, processAudioChunk, hasSpeech, isRecording])
+  }, [updateAudioLevel, isRecording])
 
   // Helper function to create WAV buffer from float32 audio data
   const createWavBuffer = (audioData, sampleRate) => {
@@ -340,7 +250,6 @@ const useAudioRecording = () => {
 
       // Reset timestamp tracking
       recordingStartTimeRef.current = null
-      totalProcessedTimeRef.current = 0
 
       setAudioLevel(0)
       mediaRecorderRef.current = null
@@ -355,44 +264,123 @@ const useAudioRecording = () => {
     }
   }, []) // Remove isRecording from dependencies to prevent recreation
 
-  // Save complete recording
+  // Save complete recording and process all audio at once
   const saveRecording = useCallback(async (meetingId) => {
-    if (chunksRef.current.length === 0) {
+    console.log('=== saveRecording called ===')
+    console.log('Audio data length:', allAudioDataRef.current.length)
+    
+    if (allAudioDataRef.current.length === 0) {
+      console.warn('No audio data to save')
       throw new Error('No audio data to save')
     }
 
     try {
-      // Final AI refinement of complete transcription
-      let finalText = transcriptionBufferRef.current.trim()
-      if (window.electronAPI && window.electronAPI.llamaGetStatus && finalText) {
-        try {
-          const llamaStatus = await window.electronAPI.llamaGetStatus()
-          if (llamaStatus.success && llamaStatus.initialized) {
-            const prompt = `Clean up the following voice transcription by correcting grammar, punctuation, and formatting. Return ONLY the revised text—no explanations, no headings, and no comments:\n"${finalText}"`
-            const result = await window.electronAPI.llamaAnswerQuestion(prompt, meetingId, [], [])
-            // Only use the AI result if it's not empty and not just the prompt
-            if (result.success && result.answer && result.answer.trim() && !result.answer.includes(prompt)) {
-              finalText = result.answer.trim()
+      setIsProcessing(true)
+      
+      // Process all collected audio data
+      const audioData = allAudioDataRef.current
+      const sampleRate = 16000
+      
+      console.log(`Processing ${audioData.length} audio samples at ${sampleRate}Hz`)
+      
+      // Initialize AI service if needed
+      if (window.electronAPI) {
+        const status = await window.electronAPI.aiGetStatus()
+        if (!status.initialized) {
+          console.log('Initializing AI service...')
+          const initResult = await window.electronAPI.aiInitialize()
+          if (!initResult.success) {
+            throw new Error('Failed to initialize AI service: ' + initResult.error)
+          }
+        }
+
+        // Convert audio data to WAV format and process
+        console.log('Converting audio to WAV format...')
+        const wavBuffer = createWavBuffer(audioData, sampleRate)
+        const uint8Array = new Uint8Array(wavBuffer)
+        const hexString = Array.from(uint8Array)
+          .map((byte) => byte.toString(16).padStart(2, '0'))
+          .join('')
+
+        console.log('Sending audio to Whisper for transcription...')
+        const result = await window.electronAPI.processAudioChunk(hexString, sampleRate)
+        console.log('Whisper result:', result)
+        
+        let finalText = ''
+        if (result && result.success && result.result && result.result.text) {
+          finalText = result.result.text.trim()
+          console.log('Raw transcription:', finalText)
+          
+          // AI refinement with Llama if available
+          if (window.electronAPI.llamaGetStatus && finalText && finalText !== '[BLANK_AUDIO]') {
+            try {
+              console.log('Checking Llama status for refinement...')
+              const llamaStatus = await window.electronAPI.llamaGetStatus()
+              if (llamaStatus.success && llamaStatus.initialized) {
+                console.log('Refining text with Llama...')
+                const prompt = `Clean up the following voice transcription by correcting grammar, punctuation, and formatting. Return ONLY the revised text—no explanations, no headings, and no comments:\n"${finalText}"`
+                const llamaResult = await window.electronAPI.llamaAnswerQuestion(prompt, meetingId, [], [])
+                if (llamaResult.success && llamaResult.answer && llamaResult.answer.trim() && !llamaResult.answer.includes(prompt)) {
+                  finalText = llamaResult.answer.trim()
+                  console.log('Refined text:', finalText)
+                }
+              }
+            } catch (refinementError) {
+              console.warn('AI refinement failed:', refinementError.message)
             }
           }
-        } catch (finalRefineError) {
-          console.warn('Final AI refinement failed:', finalRefineError.message)
         }
+
+        // Auto-paste to focused input field
+        if (finalText && finalText !== '[BLANK_AUDIO]') {
+          console.log('Pasting text to focused input:', finalText)
+          await pasteToFocusedInput(finalText)
+        }
+
+        // Update the store
+        if (window.useDictationStore) {
+          window.useDictationStore.getState().updateTranscription(finalText)
+        }
+
+        // Clear audio data
+        allAudioDataRef.current = []
+        chunksRef.current = []
+
+        console.log('Recording processing completed successfully')
+        return { success: true, result: { text: finalText } }
       }
-
-      // Update the store with the final text
-      if (window.useDictationStore) {
-        window.useDictationStore.getState().updateTranscription(finalText)
-        window.useDictationStore.getState().setProcessedTranscription('')
-      }
-
-      // Clear chunks since transcription was saved live
-      chunksRef.current = []
-
-      return { success: true, result: { text: 'Transcription saved during recording' } }
     } catch (err) {
-      console.error('Error completing recording:', err)
+      console.error('Error processing complete recording:', err)
       throw err
+    } finally {
+      setIsProcessing(false)
+    }
+  }, [])
+
+  // Helper function to paste text to focused input
+  const pasteToFocusedInput = useCallback(async (text) => {
+    try {
+      if (window.electronAPI && window.electronAPI.pasteToFocusedApp) {
+        console.log('Pasting to focused app:', text)
+        const result = await window.electronAPI.pasteToFocusedApp(text)
+        
+        if (result.success) {
+          console.log('Text pasted successfully to focused app')
+          // Show brief notification
+          if (window.electronAPI.showNotification) {
+            await window.electronAPI.showNotification('Dictation Complete', `"${text}"`)
+          }
+        } else {
+          console.warn('Failed to paste to focused app:', result.error)
+          console.log('Transcribed text (copy manually):', text)
+        }
+      } else {
+        console.warn('pasteToFocusedApp not available')
+        console.log('Transcribed text (copy manually):', text)
+      }
+    } catch (error) {
+      console.warn('Failed to paste to focused input:', error.message)
+      console.log('Transcribed text (copy manually):', text)
     }
   }, [])
 

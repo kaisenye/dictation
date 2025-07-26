@@ -47,4 +47,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Notifications
   showNotification: (title, body) => ipcRenderer.invoke('show-notification', title, body),
+  
+  // Clipboard and paste operations
+  pasteToFocusedApp: (text) => ipcRenderer.invoke('paste-to-focused-app', text),
 })

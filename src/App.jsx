@@ -46,7 +46,7 @@ function App() {
   }, [setWindowVisible])
 
   return (
-    <div className="h-screen">
+    <div className="w-full h-full">
       <DictationView />
     </div>
   )
