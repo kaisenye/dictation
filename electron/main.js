@@ -9,15 +9,64 @@ let mainWindow
 let tray = null
 let isDictationMode = false
 
+
+// Get bottom center position for window
+function getBottomCenterPosition() {
+  const { screen } = require('electron')
+  const cursorPosition = screen.getCursorScreenPoint()
+  const display = screen.getDisplayNearestPoint(cursorPosition)
+  
+  const windowWidth = 300
+  const windowHeight = 80
+  const margin = 60
+  
+  // Calculate bottom center position
+  const x = Math.floor((display.workAreaSize.width - windowWidth) / 2) + display.workArea.x
+  const y = display.workArea.y + display.workAreaSize.height - windowHeight - margin
+  
+  return {
+    x: Math.max(display.workArea.x, Math.min(x, display.workArea.x + display.workAreaSize.width - windowWidth)),
+    y: Math.max(display.workArea.y, Math.min(y, display.workArea.y + display.workAreaSize.height - windowHeight - margin))
+  }
+}
+
+// Helper function to show window on current desktop
+async function showWindowOnCurrentDesktop() {
+  if (mainWindow) {
+    // If window is already visible, just focus it
+    if (mainWindow.isVisible()) {
+      mainWindow.focus()
+      return
+    }
+
+    // First ensure the window is visible on all workspaces
+    if (process.platform === 'darwin') {
+      mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    }
+
+    // Always position at bottom center (ignore saved position)
+    const position = getBottomCenterPosition()
+    mainWindow.setPosition(position.x, position.y)
+    console.log('Window positioned at bottom center:', position)
+
+    // Ensure window stays on top
+    mainWindow.setAlwaysOnTop(true)
+
+    // Show and focus the window
+    mainWindow.show()
+    mainWindow.focus()
+  }
+}
+
 function createWindow() {
-  // Create the browser window
+  // Create the browser window - small floating widget
   mainWindow = new BrowserWindow({
-    width: 500,
-    height: 500,
-    minWidth: 500,
-    minHeight: 500,
-    maxWidth: 500,
-    maxHeight: 500,
+    width: 300,
+    height: 80,
+    minWidth: 300,
+    minHeight: 80,
+    maxWidth: 300,
+    maxHeight: 80,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -31,10 +80,11 @@ function createWindow() {
     resizable: false, // Disable resizing to maintain fixed size
     skipTaskbar: true, // Don't show in taskbar/dock
     frame: false, // Custom frame for dictation window
-    transparent: true, // Enable transparency for the window
+    transparent: false, // Disable transparency for solid window
     movable: true, // Ensure window is movable
     hasShadow: true, // Enable window shadow for better visual separation
     alwaysOnTop: true, // Keep window on top of all other applications
+    visibleOnAllWorkspaces: true, // Make window visible on all desktops/spaces
   })
 
   // Set Content Security Policy
@@ -57,14 +107,19 @@ function createWindow() {
   // Load the app
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173')
-    mainWindow.webContents.openDevTools()
+    // Removed auto-opening of dev tools
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
 
   // Show window when ready to prevent visual flash
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show()
+    // Don't show immediately - wait for shortcut
+    // mainWindow.show()
+    // Ensure window appears on current desktop when shown
+    if (process.platform === 'darwin') {
+      mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    }
   })
 
   // Handle window closed
@@ -84,6 +139,8 @@ function createWindow() {
     shell.openExternal(url)
     return { action: 'deny' }
   })
+
+  // Remove position tracking - window will always appear at bottom center
 }
 
 // Database migration function
@@ -325,6 +382,8 @@ function setupIpcHandlers() {
     if (mainWindow) mainWindow.close()
   })
 
+  // Removed window position save/load - window always appears at bottom center
+
   // Notifications
   ipcMain.handle('show-notification', (event, title, body) => {
     if (Notification.isSupported()) {
@@ -332,6 +391,40 @@ function setupIpcHandlers() {
         title: title,
         body: body,
       }).show()
+    }
+  })
+
+  // Clipboard and paste operations
+  ipcMain.handle('paste-to-focused-app', async (event, text) => {
+    try {
+      const { clipboard } = require('electron')
+      
+      // Set text to clipboard
+      clipboard.writeText(text)
+      
+      // Hide the dictation window to allow the previously focused app to regain focus
+      if (mainWindow && mainWindow.isVisible()) {
+        mainWindow.hide()
+      }
+      
+      // Small delay to ensure the target app regains focus
+      setTimeout(() => {
+        // Simulate Cmd+V keypress on macOS
+        if (process.platform === 'darwin') {
+          const { execSync } = require('child_process')
+          try {
+            // Use AppleScript to simulate Cmd+V
+            execSync(`osascript -e 'tell application "System Events" to keystroke "v" using command down'`)
+          } catch (scriptError) {
+            console.warn('Failed to simulate paste keystroke:', scriptError.message)
+          }
+        }
+      }, 200)
+      
+      return { success: true }
+    } catch (error) {
+      console.error('Failed to paste to focused app:', error)
+      return { success: false, error: error.message }
     }
   })
 
@@ -584,33 +677,51 @@ function createMenu() {
 
 // Global shortcut and tray management
 function registerGlobalShortcuts() {
-  // Toggle dictation window
-  const toggleSuccess = globalShortcut.register('CmdOrCtrl+Shift+D', () => {
-    console.log('Global shortcut CmdOrCtrl+Shift+D pressed')
+  // Unregister any existing shortcuts first
+  globalShortcut.unregisterAll()
+  // Toggle dictation window and recording
+  const toggleSuccess = globalShortcut.register('CmdOrCtrl+Shift+D', async () => {
+    console.log('=== Global shortcut CmdOrCtrl+Shift+D pressed ===')
+    console.log('Main window exists:', !!mainWindow)
+    console.log('Main window visible:', mainWindow?.isVisible())
+
     if (mainWindow) {
       if (mainWindow.isVisible()) {
-        mainWindow.hide()
+        console.log('Window is visible, sending toggle recording event')
+        // If visible, send toggle recording event
+        mainWindow.webContents.send('global-shortcut-toggle-dictation')
       } else {
-        mainWindow.show()
-        mainWindow.focus()
+        console.log('Window is hidden, showing window and starting recording')
+        // If hidden, show window and start recording
+        await showWindowOnCurrentDesktop()
+        setTimeout(() => {
+          console.log('Sending toggle recording event after window show')
+          mainWindow.webContents.send('global-shortcut-toggle-dictation')
+        }, 1000) // Increased delay to ensure React is loaded
       }
+    } else {
+      console.log('Main window is null!')
     }
   })
 
   if (!toggleSuccess) {
     console.log('Failed to register CmdOrCtrl+Shift+D shortcut')
+  } else {
+    console.log('Successfully registered CmdOrCtrl+Shift+D shortcut')
   }
 
-  // Stop dictation
-  const stopSuccess = globalShortcut.register('CmdOrCtrl+Shift+S', () => {
-    console.log('Global shortcut CmdOrCtrl+Shift+S pressed')
-    if (mainWindow) {
-      mainWindow.webContents.send('global-shortcut-stop-dictation')
+  // Close/hide window
+  const closeWindowSuccess = globalShortcut.register('CmdOrCtrl+Shift+S', () => {
+    console.log('Global shortcut CmdOrCtrl+Shift+S pressed - hiding window')
+    if (mainWindow && mainWindow.isVisible()) {
+      mainWindow.hide()
     }
   })
 
-  if (!stopSuccess) {
+  if (!closeWindowSuccess) {
     console.log('Failed to register CmdOrCtrl+Shift+S shortcut')
+  } else {
+    console.log('Successfully registered CmdOrCtrl+Shift+S shortcut')
   }
 
   // Copy transcription
@@ -626,14 +737,13 @@ function registerGlobalShortcuts() {
   }
 
   // Show/hide app
-  const showHideSuccess = globalShortcut.register('CmdOrCtrl+Shift+H', () => {
+  const showHideSuccess = globalShortcut.register('CmdOrCtrl+Shift+H', async () => {
     console.log('Global shortcut CmdOrCtrl+Shift+H pressed')
     if (mainWindow) {
       if (mainWindow.isVisible()) {
         mainWindow.hide()
       } else {
-        mainWindow.show()
-        mainWindow.focus()
+        await showWindowOnCurrentDesktop()
       }
     }
   })
@@ -684,20 +794,18 @@ function createTray() {
   const contextMenu = Menu.buildFromTemplate([
     {
       label: 'Start Dictation',
-      click: () => {
+      click: async () => {
         if (mainWindow) {
-          mainWindow.show()
-          mainWindow.focus()
+          await showWindowOnCurrentDesktop()
           mainWindow.webContents.send('tray-start-dictation')
         }
       },
     },
     {
       label: 'Settings',
-      click: () => {
+      click: async () => {
         if (mainWindow) {
-          mainWindow.show()
-          mainWindow.focus()
+          await showWindowOnCurrentDesktop()
           mainWindow.webContents.send('tray-open-settings')
         }
       },
@@ -715,13 +823,12 @@ function createTray() {
   tray.setToolTip('Romo')
 
   // Handle tray icon click
-  tray.on('click', () => {
+  tray.on('click', async () => {
     if (mainWindow) {
       if (mainWindow.isVisible()) {
         mainWindow.hide()
       } else {
-        mainWindow.show()
-        mainWindow.focus()
+        await showWindowOnCurrentDesktop()
       }
     }
   })
@@ -759,6 +866,8 @@ app.whenReady().then(async () => {
     setupIpcHandlers()
     registerGlobalShortcuts()
 
+    // Window will always appear at bottom center when shown
+
     // Create tray (handle errors gracefully)
     try {
       createTray()
@@ -766,10 +875,17 @@ app.whenReady().then(async () => {
       console.warn('Failed to create tray, continuing without tray:', trayError.message)
     }
 
-    app.on('activate', () => {
+    app.on('activate', async () => {
       // On macOS, re-create window when dock icon is clicked
       if (BrowserWindow.getAllWindows().length === 0) {
         createWindow()
+      } else if (mainWindow) {
+        // If window exists but is hidden, show it on current desktop
+        if (!mainWindow.isVisible()) {
+          await showWindowOnCurrentDesktop()
+        } else {
+          mainWindow.focus()
+        }
       }
     })
 

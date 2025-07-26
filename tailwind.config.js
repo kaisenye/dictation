@@ -1,9 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
       colors: {
@@ -38,12 +35,12 @@ export default {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       spacing: {
-        '18': '4.5rem',
-        '88': '22rem',
+        18: '4.5rem',
+        88: '22rem',
       },
       borderRadius: {
-        'lg': '0.5rem',
-        'xl': '0.75rem',
+        lg: '0.5rem',
+        xl: '0.75rem',
       },
       animation: {
         'slide-up': 'slideUp 0.3s ease-out',
@@ -51,13 +48,13 @@ export default {
       },
       keyframes: {
         slideUp: {
-          '0%': { 
+          '0%': {
             opacity: '0',
-            transform: 'translateY(10px)' 
+            transform: 'translateY(10px)',
           },
-          '100%': { 
+          '100%': {
             opacity: '1',
-            transform: 'translateY(0)' 
+            transform: 'translateY(0)',
           },
         },
         fadeIn: {
@@ -68,4 +65,4 @@ export default {
     },
   },
   plugins: [],
-} 
+}
