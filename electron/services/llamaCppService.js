@@ -16,7 +16,6 @@ class LlamaCppService extends EventEmitter {
     this.serverProcess = null
     this.serverPort = 8080
     this.tempDir = os.tmpdir()
-    this.conversationHistory = new Map() // meetingId -> conversation history
   }
 
   /**
@@ -245,7 +244,7 @@ class LlamaCppService extends EventEmitter {
   /**
    * Generate response using Llama.cpp
    */
-  async generateResponse(prompt, meetingId = null, context = null) {
+  async generateResponse(prompt) {
     if (!this.isInitialized) {
       throw new Error('Llama.cpp service not initialized')
     }
@@ -253,17 +252,8 @@ class LlamaCppService extends EventEmitter {
     const requestId = ++this.requestId
 
     try {
-      // Build conversation context
-      let fullPrompt = this.buildPrompt(prompt, meetingId, context)
-
-      // Make request to server
-      const response = await this.makeServerRequest(fullPrompt)
-
-      // Update conversation history
-      if (meetingId) {
-        this.updateConversationHistory(meetingId, prompt, response)
-      }
-
+      // For transcript refinement, use direct prompt
+      const response = await this.makeServerRequest(prompt)
       return response
     } catch (error) {
       console.error(`Error generating response ${requestId}:`, error)
@@ -272,45 +262,10 @@ class LlamaCppService extends EventEmitter {
   }
 
   /**
-   * Build prompt with context
+   * Build prompt for transcript refinement
    */
-  buildPrompt(prompt, meetingId, context) {
-    let fullPrompt = ''
-
-    // Add system instruction
-    fullPrompt += 'You are a helpful AI assistant that helps users understand meeting conversations. '
-    fullPrompt += 'You can answer questions about meeting content, provide summaries, and help with follow-up actions. '
-    fullPrompt += 'Be concise, accurate, and helpful.\n\n'
-
-    // Add meeting context if available
-    if (context && context.transcripts && context.transcripts.length > 0) {
-      fullPrompt += 'Meeting Context:\n'
-      context.transcripts.forEach((transcript, index) => {
-        const speaker =
-          context.speakers?.find((s) => s.id === transcript.speaker_id)?.display_name ||
-          transcript.speaker_id ||
-          'Unknown'
-        fullPrompt += `${speaker}: ${transcript.text}\n`
-      })
-      fullPrompt += '\n'
-    }
-
-    // Add conversation history
-    if (meetingId && this.conversationHistory.has(meetingId)) {
-      const history = this.conversationHistory.get(meetingId)
-      if (history.length > 0) {
-        fullPrompt += 'Previous conversation:\n'
-        history.slice(-3).forEach(([user, assistant]) => {
-          fullPrompt += `User: ${user}\nAssistant: ${assistant}\n`
-        })
-        fullPrompt += '\n'
-      }
-    }
-
-    // Add current prompt
-    fullPrompt += `User: ${prompt}\nAssistant:`
-
-    return fullPrompt
+  buildTranscriptRefinementPrompt(transcript) {
+    return `Fix grammar, spelling, and punctuation in this transcript. Return only the corrected text without greetings, thanks, or additional comments:\n\n${transcript}`
   }
 
   /**
@@ -331,11 +286,11 @@ class LlamaCppService extends EventEmitter {
           },
           body: JSON.stringify({
             prompt: prompt,
-            n_predict: 512,
-            temperature: 0.7,
-            top_p: 0.9,
-            repeat_penalty: 1.1,
-            stop: ['User:', '\n\n'],
+            n_predict: 256,
+            temperature: 0.4,
+            top_p: 0.8,
+            repeat_penalty: 1.0,
+            stop: ['\n\n'],
           }),
         })
 
@@ -369,63 +324,21 @@ class LlamaCppService extends EventEmitter {
   }
 
   /**
-   * Update conversation history
+   * Refine transcript text
    */
-  updateConversationHistory(meetingId, userPrompt, assistantResponse) {
-    if (!this.conversationHistory.has(meetingId)) {
-      this.conversationHistory.set(meetingId, [])
+  async refineTranscript(transcript) {
+    if (!transcript || transcript.trim().length === 0) {
+      return 'No transcript provided for refinement.'
     }
-
-    const history = this.conversationHistory.get(meetingId)
-    history.push([userPrompt, assistantResponse])
-
-    // Keep only last 10 exchanges to manage memory
-    if (history.length > 10) {
-      history.splice(0, history.length - 10)
-    }
-  }
-
-  /**
-   * Generate meeting summary
-   */
-  async generateMeetingSummary(meetingId, transcripts, speakers) {
-    if (!transcripts || transcripts.length === 0) {
-      return 'No meeting content available for summarization.'
-    }
-
-    const context = { transcripts, speakers }
-    const summaryPrompt =
-      'Please provide a comprehensive summary of this meeting, including key points discussed, decisions made, and any action items mentioned. Format the summary in a clear, structured way.'
 
     try {
-      const summary = await this.generateResponse(summaryPrompt, meetingId, context)
-      return summary
+      const prompt = this.buildTranscriptRefinementPrompt(transcript)
+      const response = await this.makeServerRequest(prompt)
+      return response.trim()
     } catch (error) {
-      console.error('Error generating meeting summary:', error)
+      console.error('Error refining transcript:', error)
       throw error
     }
-  }
-
-  /**
-   * Answer question about meeting context
-   */
-  async answerMeetingQuestion(question, meetingId, transcripts, speakers) {
-    const context = { transcripts, speakers }
-
-    try {
-      const answer = await this.generateResponse(question, meetingId, context)
-      return answer
-    } catch (error) {
-      console.error('Error answering meeting question:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Clear conversation history for a meeting
-   */
-  clearConversationHistory(meetingId) {
-    this.conversationHistory.delete(meetingId)
   }
 
   /**
@@ -440,7 +353,6 @@ class LlamaCppService extends EventEmitter {
     }
 
     this.isInitialized = false
-    this.conversationHistory.clear()
 
     console.log('Llama.cpp service shutdown complete')
   }

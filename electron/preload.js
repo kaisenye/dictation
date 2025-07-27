@@ -17,14 +17,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   aiGetStatus: () => ipcRenderer.invoke('ai-get-status'),
   aiShutdown: () => ipcRenderer.invoke('ai-shutdown'),
 
-  // Llama.cpp Service operations
-  llamaInitialize: () => ipcRenderer.invoke('llama-initialize'),
-  llamaAnswerQuestion: (question, meetingId, transcripts, speakers) =>
-    ipcRenderer.invoke('llama-answer-question', question, meetingId, transcripts, speakers),
-  llamaGenerateSummary: (meetingId, transcripts, speakers) =>
-    ipcRenderer.invoke('llama-generate-summary', meetingId, transcripts, speakers),
-  llamaGetStatus: () => ipcRenderer.invoke('llama-get-status'),
-  llamaClearHistory: (meetingId) => ipcRenderer.invoke('llama-clear-history', meetingId),
+  // LLM Service operations
+  llamaRefineTranscript: (transcript) => ipcRenderer.invoke('llama-refine-transcript', transcript),
 
   // Audio processing methods for React components (aliases for convenience)
   processAudioChunk: (audioBuffer, sampleRate = 16000) =>

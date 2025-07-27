@@ -39,7 +39,6 @@ const useDictationStore = create((set) => ({
       error: null,
     })
   },
-
 }))
 
 export default useDictationStore

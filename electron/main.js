@@ -151,60 +151,6 @@ function createWindow() {
   // Remove position tracking - window will always appear at bottom center
 }
 
-// Database migration function
-async function runMigrations() {
-  return new Promise((resolve, reject) => {
-    // Check existing columns in meetings table
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('runMigrations called, but database is no longer initialized.')
-    resolve()
-  })
-}
-
-// Database initialization
-async function initializeDatabase() {
-  return new Promise((resolve, reject) => {
-    try {
-      // This function is no longer needed as database dependencies are removed.
-      // Keeping it for now in case it's called elsewhere or for future use.
-      console.log('initializeDatabase called, but database is no longer initialized.')
-      resolve(true)
-    } catch (error) {
-      console.error('Failed to initialize database:', error)
-      reject(error)
-    }
-  })
-}
-
-// Helper function to promisify database operations
-function dbRun(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('dbRun called, but database is no longer initialized.')
-    resolve({ lastID: null, changes: 0 }) // Return dummy values
-  })
-}
-
-function dbGet(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('dbGet called, but database is no longer initialized.')
-    resolve(null) // Return dummy value
-  })
-}
-
-function dbAll(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('dbAll called, but database is no longer initialized.')
-    resolve([]) // Return dummy value
-  })
-}
-
 // IPC Handlers
 function setupIpcHandlers() {
   // Path utilities
@@ -215,140 +161,6 @@ function setupIpcHandlers() {
   ipcMain.handle('get-app-path', () => {
     return app.getAppPath()
   })
-
-  // Database initialization
-  ipcMain.handle('initializeDatabase', async () => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('initializeDatabase IPC handler called, but database is no longer initialized.')
-    return true // Always return true as database is removed
-  })
-
-  // Meeting operations
-  ipcMain.handle('createMeeting', async (event, meetingData) => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('createMeeting IPC handler called, but database is no longer initialized.')
-    return null // Return dummy value
-  })
-
-  ipcMain.handle('getMeeting', async (event, id) => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('getMeeting IPC handler called, but database is no longer initialized.')
-    return null // Return dummy value
-  })
-
-  ipcMain.handle('getAllMeetings', async (event, limit = 50, offset = 0) => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('getAllMeetings IPC handler called, but database is no longer initialized.')
-    return [] // Return dummy value
-  })
-
-  ipcMain.handle('updateMeeting', async (event, id, updates) => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('updateMeeting IPC handler called, but database is no longer initialized.')
-    return null // Return dummy value
-  })
-
-  ipcMain.handle('deleteMeeting', async (event, id) => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('deleteMeeting IPC handler called, but database is no longer initialized.')
-    return null // Return dummy value
-  })
-
-  ipcMain.handle('endMeeting', async (event, id, endTime, duration) => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('endMeeting IPC handler called, but database is no longer initialized.')
-    return null // Return dummy value
-  })
-
-  // Transcript operations
-  ipcMain.handle('addTranscript', async (event, transcriptData) => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('addTranscript IPC handler called, but database is no longer initialized.')
-    return null // Return dummy value
-  })
-
-  ipcMain.handle('getTranscripts', async (event, meetingId) => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('getTranscripts IPC handler called, but database is no longer initialized.')
-    return [] // Return dummy value
-  })
-
-  ipcMain.handle('searchTranscripts', async (event, query, meetingId = null) => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('searchTranscripts IPC handler called, but database is no longer initialized.')
-    return [] // Return dummy value
-  })
-
-  // Speaker operations
-  ipcMain.handle('addOrUpdateSpeaker', async (event, speakerData) => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('addOrUpdateSpeaker IPC handler called, but database is no longer initialized.')
-    return null // Return dummy value
-  })
-
-  ipcMain.handle('getSpeakers', async (event, meetingId) => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('getSpeakers IPC handler called, but database is no longer initialized.')
-    return [] // Return dummy value
-  })
-
-  ipcMain.handle('updateSpeakerName', async (event, speakerId, meetingId, displayName) => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('updateSpeakerName IPC handler called, but database is no longer initialized.')
-    return null // Return dummy value
-  })
-
-  // Settings operations
-  ipcMain.handle('getSetting', async (event, key) => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('getSetting IPC handler called, but database is no longer initialized.')
-    return null // Return dummy value
-  })
-
-  ipcMain.handle('setSetting', async (event, key, value) => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('setSetting IPC handler called, but database is no longer initialized.')
-    return null // Return dummy value
-  })
-
-  // Analytics and statistics
-  ipcMain.handle('getMeetingStats', async (event) => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('getMeetingStats IPC handler called, but database is no longer initialized.')
-    return null // Return dummy value
-  })
-
-  // Database maintenance
-  ipcMain.handle('vacuum', async (event) => {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('vacuum IPC handler called, but database is no longer initialized.')
-    return null // Return dummy value
-  })
-
-  // Utility function to save transcript segments and speakers
-  async function saveTranscriptSegments(segments, meetingId) {
-    // This function is no longer needed as database dependencies are removed.
-    // Keeping it for now in case it's called elsewhere or for future use.
-    console.log('saveTranscriptSegments called, but database is no longer initialized.')
-    return { success: true }
-  }
 
   // File system operations
   ipcMain.handle('read-file', async (event, filePath) => {
@@ -562,34 +374,9 @@ function setupIpcHandlers() {
       const result = await whisperCppService.processAudioChunk(audioBuffer, sampleRate)
       console.log('Whisper.cpp result:', result)
 
-      // Store transcription results in database
-      console.log('Checking result structure:', {
-        hasResult: !!result,
-        hasSegments: !!(result && result.segments),
-        segmentsLength: result?.segments?.length || 0,
-      })
-
-      if (result && result.segments && result.segments.length > 0) {
-        console.log(`Storing ${result.segments.length} transcript segments`)
-        await saveTranscriptSegments(result.segments, meetingId)
-        console.log('Updated meeting transcription status')
-      } else {
-        console.log('No segments found in result, not storing anything')
-      }
-
       return { success: true, result }
     } catch (error) {
       console.error('Failed to process full recording:', error)
-      return { success: false, error: error.message }
-    }
-  })
-
-  ipcMain.handle('save-live-transcription-segments', async (event, segments, meetingId) => {
-    try {
-      console.log(`Saving ${segments.length} live transcription segments for meeting ${meetingId}`)
-      return await saveTranscriptSegments(segments, meetingId)
-    } catch (error) {
-      console.error('Failed to save live transcription segments:', error)
       return { success: false, error: error.message }
     }
   })
@@ -627,56 +414,13 @@ function setupIpcHandlers() {
     }
   })
 
-  // Llama.cpp Service handlers
-  ipcMain.handle('llama-initialize', async () => {
+  // LLM Service - Single endpoint for transcript refinement
+  ipcMain.handle('llama-refine-transcript', async (event, transcript) => {
     try {
-      await llamaCppService.initialize()
-      return { success: true }
+      const refinedTranscript = await llamaCppService.refineTranscript(transcript)
+      return { success: true, refinedTranscript }
     } catch (error) {
-      console.error('Failed to initialize Llama.cpp service:', error)
-      return { success: false, error: error.message }
-    }
-  })
-
-  ipcMain.handle('llama-answer-question', async (event, question, meetingId, transcripts, speakers) => {
-    try {
-      const answer = await llamaCppService.answerMeetingQuestion(question, meetingId, transcripts, speakers)
-      return { success: true, answer }
-    } catch (error) {
-      console.error('Failed to answer question:', error)
-      return { success: false, error: error.message }
-    }
-  })
-
-  ipcMain.handle('llama-generate-summary', async (event, meetingId, transcripts, speakers) => {
-    try {
-      const summary = await llamaCppService.generateMeetingSummary(meetingId, transcripts, speakers)
-      return { success: true, summary }
-    } catch (error) {
-      console.error('Failed to generate summary:', error)
-      return { success: false, error: error.message }
-    }
-  })
-
-  ipcMain.handle('llama-get-status', async () => {
-    try {
-      return {
-        success: true,
-        initialized: llamaCppService.isInitialized,
-        modelPath: llamaCppService.modelPath,
-      }
-    } catch (error) {
-      console.error('Failed to get Llama.cpp service status:', error)
-      return { success: false, error: error.message }
-    }
-  })
-
-  ipcMain.handle('llama-clear-history', async (event, meetingId) => {
-    try {
-      llamaCppService.clearConversationHistory(meetingId)
-      return { success: true }
-    } catch (error) {
-      console.error('Failed to clear conversation history:', error)
+      console.error('Failed to refine transcript:', error)
       return { success: false, error: error.message }
     }
   })

@@ -2,12 +2,12 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 
 const useAudioRecording = () => {
   console.log('=== useAudioRecording hook initialized ===')
-  
+
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState(null)
   const [audioLevel, setAudioLevel] = useState(0)
-  
+
   console.log('=== Hook state initialized ===', { isRecording, isProcessing, error, audioLevel })
 
   const mediaRecorderRef = useRef(null)
@@ -17,10 +17,7 @@ const useAudioRecording = () => {
   const animationFrameRef = useRef(null)
   const chunksRef = useRef([])
   const recordingStartTimeRef = useRef(null)
-  const allAudioDataRef = useRef([]) // Store all audio data for final processing
-  const lastProcessedTextRef = useRef('')
-  const transcriptionBufferRef = useRef('')
-  const processedAudioLengthRef = useRef(0)
+  const allAudioDataRef = useRef([])
 
   // Audio level monitoring with improved sensitivity
   const updateAudioLevel = useCallback(() => {
@@ -118,7 +115,7 @@ const useAudioRecording = () => {
 
       // Simple audio collection - store all audio data for final processing
       const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1)
-      
+
       processor.onaudioprocess = (event) => {
         const inputData = event.inputBuffer.getChannelData(0)
         // Store all audio data for final processing
@@ -268,7 +265,7 @@ const useAudioRecording = () => {
   const saveRecording = useCallback(async (meetingId) => {
     console.log('=== saveRecording called ===')
     console.log('Audio data length:', allAudioDataRef.current.length)
-    
+
     if (allAudioDataRef.current.length === 0) {
       console.warn('No audio data to save')
       throw new Error('No audio data to save')
@@ -276,13 +273,13 @@ const useAudioRecording = () => {
 
     try {
       setIsProcessing(true)
-      
+
       // Process all collected audio data
       const audioData = allAudioDataRef.current
       const sampleRate = 16000
-      
+
       console.log(`Processing ${audioData.length} audio samples at ${sampleRate}Hz`)
-      
+
       // Initialize AI service if needed
       if (window.electronAPI) {
         const status = await window.electronAPI.aiGetStatus()
@@ -305,12 +302,12 @@ const useAudioRecording = () => {
         console.log('Sending audio to Whisper for transcription...')
         const result = await window.electronAPI.processAudioChunk(hexString, sampleRate)
         console.log('Whisper result:', result)
-        
+
         let finalText = ''
         if (result && result.success && result.result && result.result.text) {
           finalText = result.result.text.trim()
           console.log('Raw transcription:', finalText)
-          
+
           // AI refinement with Llama if available
           if (window.electronAPI.llamaGetStatus && finalText && finalText !== '[BLANK_AUDIO]') {
             try {
@@ -320,7 +317,12 @@ const useAudioRecording = () => {
                 console.log('Refining text with Llama...')
                 const prompt = `Clean up the following voice transcription by correcting grammar, punctuation, and formatting. Return ONLY the revised text—no explanations, no headings, and no comments:\n"${finalText}"`
                 const llamaResult = await window.electronAPI.llamaAnswerQuestion(prompt, meetingId, [], [])
-                if (llamaResult.success && llamaResult.answer && llamaResult.answer.trim() && !llamaResult.answer.includes(prompt)) {
+                if (
+                  llamaResult.success &&
+                  llamaResult.answer &&
+                  llamaResult.answer.trim() &&
+                  !llamaResult.answer.includes(prompt)
+                ) {
                   finalText = llamaResult.answer.trim()
                   console.log('Refined text:', finalText)
                 }
@@ -363,7 +365,7 @@ const useAudioRecording = () => {
       if (window.electronAPI && window.electronAPI.pasteToFocusedApp) {
         console.log('Pasting to focused app:', text)
         const result = await window.electronAPI.pasteToFocusedApp(text)
-        
+
         if (result.success) {
           console.log('Text pasted successfully to focused app')
           // Show brief notification
