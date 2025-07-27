@@ -3,7 +3,6 @@ const path = require('path')
 const { EventEmitter } = require('events')
 const fs = require('fs').promises
 const os = require('os')
-const https = require('https')
 const http = require('http')
 
 class LlamaCppService extends EventEmitter {
@@ -92,14 +91,9 @@ class LlamaCppService extends EventEmitter {
   async setupModel() {
     const modelDir = path.join(__dirname, '../../llama.cpp/models')
     const possibleModels = [
-      'llama-2-7b-chat.Q4_K_M.gguf',
-      'llama-2-7b-chat.Q4_0.gguf',
-      'llama-2-7b.Q4_K_M.gguf',
-      'llama-2-7b.Q4_0.gguf',
-      'mistral-7b-instruct-v0.2.Q4_K_M.gguf',
+      'mistral-7b-instruct-v0.2.Q4_K_M.gguf', // Preferred: Better for grammar correction
       'mistral-7b-instruct-v0.1.Q4_K_M.gguf',
-      'phi-2.Q4_K_M.gguf',
-      'tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf',
+      'tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf', // Fallback: Fast but may hallucinate
     ]
 
     for (const modelName of possibleModels) {
@@ -132,15 +126,17 @@ class LlamaCppService extends EventEmitter {
       '--port',
       this.serverPort.toString(),
       '--ctx-size',
-      '4096',
+      '2048', // Reduced context size for performance
       '--threads',
-      '4',
+      '2', // Reduced threads to prevent CPU overload
       '--n-gpu-layers',
-      '1', // Use GPU if available
+      '0', // Disable GPU layers as they may cause issues
       '--repeat-penalty',
       '1.1',
       '--temp',
       '0.7',
+      '--batch-size',
+      '8', // Smaller batch size for faster response
     ]
 
     console.log(`Starting Llama.cpp server: ${this.llamaBinary} ${args.join(' ')}`)
@@ -267,7 +263,10 @@ class LlamaCppService extends EventEmitter {
    * Build prompt for transcript refinement
    */
   buildTranscriptRefinementPrompt(transcript) {
-    return `Fix grammar and punctuation: "${transcript}"\nCorrected: "`
+    // For Mistral models, use the proper chat template format
+    return `<s>[INST] Fix only grammar and punctuation errors in this text. Do not change the meaning or add new content. Return only the corrected text:
+
+"${transcript}" [/INST]`
   }
 
   /**
@@ -331,11 +330,12 @@ class LlamaCppService extends EventEmitter {
 
         const requestPayload = {
           prompt: prompt,
-          n_predict: 20, // Very short to prevent rambling
-          temperature: 0.05, // Very low temperature for minimal creativity
-          top_p: 0.3, // Very focused sampling
-          repeat_penalty: 1.3, // Higher penalty to prevent repetition
-          stop: ['"', '\n', 'Original:', 'Corrected:'],
+          n_predict: 20, // Reduced token count for faster response
+          temperature: 0.01, // Extremely low temperature for deterministic output
+          top_p: 0.1, // Very focused sampling
+          repeat_penalty: 1.5, // Higher penalty to prevent repetition
+          stop: ['</s>', '[INST]', '[/INST]', '<s>', '\n\n'],
+          stream: false, // Ensure non-streaming response
         }
 
         // Use native Node.js HTTP instead of fetch
@@ -371,6 +371,8 @@ class LlamaCppService extends EventEmitter {
           data = JSON.parse(responseText)
           console.log('Parsed JSON Data:')
           console.log(JSON.stringify(data, null, 2))
+          console.log('DEBUG - Available keys in response:', Object.keys(data))
+          console.log('DEBUG - Data type:', typeof data)
         } catch (parseError) {
           console.log('Failed to parse as JSON:', parseError.message)
           console.log('Treating as plain text response')
@@ -379,20 +381,42 @@ class LlamaCppService extends EventEmitter {
 
         // LLaMA.cpp server response can have different structures
         let content = ''
+        console.log('DEBUG - Attempting to extract content from response...')
+
         if (data.content) {
+          console.log('DEBUG - Found content field')
           content = data.content
         } else if (data.choices && data.choices[0] && data.choices[0].text) {
+          console.log('DEBUG - Found choices[0].text field')
           content = data.choices[0].text
+        } else if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+          console.log('DEBUG - Found choices[0].message.content field')
+          content = data.choices[0].message.content
         } else if (data.text) {
+          console.log('DEBUG - Found text field')
           content = data.text
         } else if (data.result) {
+          console.log('DEBUG - Found result field')
           content = data.result
         } else if (data.output) {
+          console.log('DEBUG - Found output field')
           content = data.output
+        } else if (data.response) {
+          console.log('DEBUG - Found response field')
+          content = data.response
+        } else if (data.generation) {
+          console.log('DEBUG - Found generation field')
+          content = data.generation
+        } else if (data.completion) {
+          console.log('DEBUG - Found completion field')
+          content = data.completion
         } else if (typeof data === 'string') {
+          console.log('DEBUG - Data is string')
           content = data
         } else {
           console.error('Unknown LLaMA.cpp response structure:', data)
+          console.error('Available fields:', Object.keys(data))
+          console.error('Data sample:', JSON.stringify(data).substring(0, 200))
           content = 'No response generated'
         }
 

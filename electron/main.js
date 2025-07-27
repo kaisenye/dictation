@@ -2,7 +2,7 @@ const { app, BrowserWindow, Menu, shell, ipcMain, Notification, globalShortcut, 
 const path = require('path')
 const fs = require('fs').promises
 const whisperCppService = require('./services/whisperCppService')
-const llamaCppService = require('./services/llamaCppService')
+// const llamaCppService = require('./services/llamaCppService') // Disabled
 const isDev = process.env.IS_DEV === 'true'
 
 let mainWindow
@@ -136,7 +136,7 @@ function createWindow() {
     // Shutdown AI services
     try {
       await whisperCppService.shutdown()
-      await llamaCppService.shutdown()
+      // await llamaCppService.shutdown() // Disabled
     } catch (error) {
       console.error('Error shutting down AI services:', error)
     }
@@ -414,22 +414,22 @@ function setupIpcHandlers() {
     }
   })
 
-  // LLM Service - Single endpoint for transcript refinement
-  ipcMain.handle('llama-refine-transcript', async (event, transcript) => {
-    console.log('\n🔄 LLAMA REFINEMENT REQUEST')
-    console.log('Original transcript:', `"${transcript}"`)
-    try {
-      const refinedTranscript = await llamaCppService.refineTranscript(transcript)
-      console.log('✅ LLAMA REFINEMENT SUCCESS')
-      console.log('Refined transcript:', `"${refinedTranscript}"`)
-      console.log('================================\n')
-      return { success: true, refinedTranscript }
-    } catch (error) {
-      console.error('❌ LLAMA REFINEMENT FAILED:', error.message)
-      console.log('================================\n')
-      return { success: false, error: error.message }
-    }
-  })
+  // LLM Service - Disabled for now
+  // ipcMain.handle('llama-refine-transcript', async (event, transcript) => {
+  //   console.log('\n🔄 LLAMA REFINEMENT REQUEST')
+  //   console.log('Original transcript:', `"${transcript}"`)
+  //   try {
+  //     const refinedTranscript = await llamaCppService.refineTranscript(transcript)
+  //     console.log('✅ LLAMA REFINEMENT SUCCESS')
+  //     console.log('Refined transcript:', `"${refinedTranscript}"`)
+  //     console.log('================================\n')
+  //     return { success: true, refinedTranscript }
+  //   } catch (error) {
+  //     console.error('❌ LLAMA REFINEMENT FAILED:', error.message)
+  //     console.log('================================\n')
+  //     return { success: false, error: error.message }
+  //   }
+  // })
 }
 
 // Create application menu for macOS
@@ -660,11 +660,11 @@ function createTray() {
         try {
           // Shutdown AI services first
           await whisperCppService.shutdown()
-          await llamaCppService.shutdown()
+          // await llamaCppService.shutdown() // Disabled
         } catch (error) {
           console.error('Error shutting down services:', error)
         }
-        
+
         // Force quit the app
         app.exit(0)
       },
@@ -692,22 +692,22 @@ function createTray() {
 async function requestPermissions() {
   if (process.platform === 'darwin') {
     const { systemPreferences } = require('electron')
-    
+
     try {
       // Request microphone permission
       const micStatus = systemPreferences.getMediaAccessStatus('microphone')
       console.log('Microphone permission status:', micStatus)
-      
+
       if (micStatus !== 'granted') {
         console.log('Requesting microphone permission...')
         const granted = await systemPreferences.askForMediaAccess('microphone')
         console.log('Microphone permission granted:', granted)
       }
-      
+
       // Check accessibility permission (for Apple Events/keystrokes)
       const accessibilityGranted = systemPreferences.isTrustedAccessibilityClient(false)
       console.log('Accessibility permission status:', accessibilityGranted)
-      
+
       if (!accessibilityGranted) {
         console.log('Accessibility permission needed. Opening System Preferences...')
         // This will prompt user to grant accessibility permission
@@ -724,7 +724,7 @@ app.whenReady().then(async () => {
   try {
     // Request permissions early
     await requestPermissions()
-    
+
     // Initialize AI services
     console.log('Initializing AI services...')
 
@@ -737,14 +737,14 @@ app.whenReady().then(async () => {
       // Don't fail the app startup for Whisper.cpp - it can be retried later
     }
 
-    // Initialize Llama.cpp (optional for post-processing)
-    try {
-      await llamaCppService.initialize()
-      console.log('Llama.cpp service initialized successfully')
-    } catch (llamaError) {
-      console.warn('Llama.cpp service initialization failed, will retry on demand:', llamaError.message)
-      // Don't fail the app startup for Llama.cpp - it's optional for post-processing
-    }
+    // Initialize Llama.cpp (disabled for now)
+    // try {
+    //   await llamaCppService.initialize()
+    //   console.log('Llama.cpp service initialized successfully')
+    // } catch (llamaError) {
+    //   console.warn('Llama.cpp service initialization failed, will retry on demand:', llamaError.message)
+    //   // Don't fail the app startup for Llama.cpp - it's optional for post-processing
+    // }
 
     // Create window and set up handlers (these are required)
     createWindow()
