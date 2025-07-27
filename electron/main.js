@@ -7,26 +7,27 @@ const isDev = process.env.IS_DEV === 'true'
 
 let mainWindow
 let tray = null
-let isDictationMode = false
 
-
-// Get bottom center position for window
+// Get bottom center position for window - always return pill size position
 function getBottomCenterPosition() {
   const { screen } = require('electron')
   const cursorPosition = screen.getCursorScreenPoint()
   const display = screen.getDisplayNearestPoint(cursorPosition)
-  
-  const windowWidth = 300
-  const windowHeight = 80
-  const margin = 60
-  
+
+  const windowWidth = 60 // Tiny pill width
+  const windowHeight = 20 // Tiny pill height
+  const margin = 40
+
   // Calculate bottom center position
   const x = Math.floor((display.workAreaSize.width - windowWidth) / 2) + display.workArea.x
   const y = display.workArea.y + display.workAreaSize.height - windowHeight - margin
-  
+
   return {
     x: Math.max(display.workArea.x, Math.min(x, display.workArea.x + display.workAreaSize.width - windowWidth)),
-    y: Math.max(display.workArea.y, Math.min(y, display.workArea.y + display.workAreaSize.height - windowHeight - margin))
+    y: Math.max(
+      display.workArea.y,
+      Math.min(y, display.workArea.y + display.workAreaSize.height - windowHeight - margin)
+    ),
   }
 }
 
@@ -59,14 +60,14 @@ async function showWindowOnCurrentDesktop() {
 }
 
 function createWindow() {
-  // Create the browser window - small floating widget
+  // Create the browser window - tiny pill that expands during recording
   mainWindow = new BrowserWindow({
-    width: 300,
-    height: 80,
-    minWidth: 300,
-    minHeight: 80,
-    maxWidth: 300,
-    maxHeight: 80,
+    width: 60, // Start as tiny pill
+    height: 20,
+    minWidth: 60,
+    minHeight: 20,
+    maxWidth: 260, // Smaller expanded size
+    maxHeight: 60,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -74,17 +75,21 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       webSecurity: true,
     },
-    titleBarStyle: 'hiddenInset', // macOS style
     show: false, // Don't show until ready
     icon: path.join(__dirname, '../build/icon.png'),
     resizable: false, // Disable resizing to maintain fixed size
     skipTaskbar: true, // Don't show in taskbar/dock
-    frame: false, // Custom frame for dictation window
+    frame: false, // Remove all window controls including close/expand buttons
     transparent: false, // Disable transparency for solid window
-    movable: true, // Ensure window is movable
-    hasShadow: true, // Enable window shadow for better visual separation
+    movable: false, // Prevent moving to keep it centered
+    hasShadow: false, // Remove shadow for minimal appearance
     alwaysOnTop: true, // Keep window on top of all other applications
     visibleOnAllWorkspaces: true, // Make window visible on all desktops/spaces
+    focusable: false, // Prevent window from stealing focus
+    minimizable: false, // Remove minimize button
+    maximizable: false, // Remove maximize button
+    closable: false, // Remove close button (controlled by shortcut only)
+    roundedCorners: true, // Enable rounded corners for pill shape
   })
 
   // Set Content Security Policy
@@ -114,8 +119,11 @@ function createWindow() {
 
   // Show window when ready to prevent visual flash
   mainWindow.once('ready-to-show', () => {
-    // Don't show immediately - wait for shortcut
-    // mainWindow.show()
+    // Show immediately in pill mode at bottom center
+    const position = getBottomCenterPosition()
+    mainWindow.setPosition(position.x, position.y)
+    mainWindow.show()
+
     // Ensure window appears on current desktop when shown
     if (process.platform === 'darwin') {
       mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
@@ -394,19 +402,109 @@ function setupIpcHandlers() {
     }
   })
 
+  // Window expansion for recording with spring animation
+  ipcMain.handle('expand-window-for-recording', async () => {
+    try {
+      if (mainWindow) {
+        const position = getBottomCenterPosition()
+        const targetWidth = 100 // Smaller width
+        const targetHeight = 40 // Smaller height
+        const startWidth = 50
+        const startHeight = 20
+
+        // Spring animation parameters
+        const duration = 300 // ms
+        const steps = 20
+        const stepDuration = duration / steps
+
+        // Animate with spring easing
+        for (let i = 0; i <= steps; i++) {
+          const progress = i / steps
+          // Spring easing function (easeOutBack)
+          const springProgress = 1 + 2.7 * Math.pow(progress - 1, 3) + 1.7 * Math.pow(progress - 1, 2)
+          const clampedProgress = Math.max(0, Math.min(1, springProgress))
+
+          const currentWidth = startWidth + (targetWidth - startWidth) * clampedProgress
+          const currentHeight = startHeight + (targetHeight - startHeight) * clampedProgress
+          const currentX = position.x - (currentWidth - startWidth) / 2
+          const currentY = position.y - (currentHeight - startHeight) / 2
+
+          setTimeout(() => {
+            if (mainWindow) {
+              mainWindow.setSize(Math.round(currentWidth), Math.round(currentHeight))
+              mainWindow.setPosition(Math.round(currentX), Math.round(currentY))
+            }
+          }, i * stepDuration)
+        }
+
+        console.log('Window expanding with spring animation')
+      }
+      return { success: true }
+    } catch (error) {
+      console.error('Failed to expand window:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('shrink-window-to-pill', async () => {
+    try {
+      if (mainWindow) {
+        const position = getBottomCenterPosition()
+        const targetWidth = 60
+        const targetHeight = 20
+        const startWidth = 100 // Match the new expanded size
+        const startHeight = 60
+
+        // Get current position (should be expanded)
+        const bounds = mainWindow.getBounds()
+        const startX = bounds.x
+        const startY = bounds.y
+
+        // Spring animation parameters
+        const duration = 200 // ms (faster for responsive feel)
+        const steps = 12
+        const stepDuration = duration / steps
+
+        // Animate with spring easing
+        for (let i = 0; i <= steps; i++) {
+          const progress = i / steps
+          // Smoother spring easing function (easeOutQuart)
+          const springProgress = 1 - Math.pow(1 - progress, 4)
+          const clampedProgress = Math.max(0, Math.min(1, springProgress))
+
+          const currentWidth = startWidth + (targetWidth - startWidth) * clampedProgress
+          const currentHeight = startHeight + (targetHeight - startHeight) * clampedProgress
+          const currentX = startX + (position.x - startX) * clampedProgress
+          const currentY = startY + (position.y - startY) * clampedProgress
+
+          setTimeout(() => {
+            if (mainWindow) {
+              mainWindow.setSize(Math.round(currentWidth), Math.round(currentHeight))
+              mainWindow.setPosition(Math.round(currentX), Math.round(currentY))
+            }
+          }, i * stepDuration)
+        }
+
+        console.log('Window shrinking with spring animation')
+      }
+      return { success: true }
+    } catch (error) {
+      console.error('Failed to shrink window:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
   // Clipboard and paste operations
   ipcMain.handle('paste-to-focused-app', async (event, text) => {
     try {
       const { clipboard } = require('electron')
-      
+
       // Set text to clipboard
       clipboard.writeText(text)
-      
-      // Hide the dictation window to allow the previously focused app to regain focus
-      if (mainWindow && mainWindow.isVisible()) {
-        mainWindow.hide()
-      }
-      
+
+      // DON'T hide the window - keep pill visible
+      // Just ensure the previously focused app regains focus without hiding our pill
+
       // Small delay to ensure the target app regains focus
       setTimeout(() => {
         // Simulate Cmd+V keypress on macOS
@@ -420,7 +518,7 @@ function setupIpcHandlers() {
           }
         }
       }, 200)
-      
+
       return { success: true }
     } catch (error) {
       console.error('Failed to paste to focused app:', error)
@@ -675,53 +773,39 @@ function createMenu() {
   Menu.setApplicationMenu(menu)
 }
 
+// Simple recording state
+let isRecording = false
+
 // Global shortcut and tray management
 function registerGlobalShortcuts() {
   // Unregister any existing shortcuts first
   globalShortcut.unregisterAll()
-  // Toggle dictation window and recording
-  const toggleSuccess = globalShortcut.register('CmdOrCtrl+Shift+D', async () => {
-    console.log('=== Global shortcut CmdOrCtrl+Shift+D pressed ===')
-    console.log('Main window exists:', !!mainWindow)
-    console.log('Main window visible:', mainWindow?.isVisible())
 
-    if (mainWindow) {
-      if (mainWindow.isVisible()) {
-        console.log('Window is visible, sending toggle recording event')
-        // If visible, send toggle recording event
-        mainWindow.webContents.send('global-shortcut-toggle-dictation')
-      } else {
-        console.log('Window is hidden, showing window and starting recording')
-        // If hidden, show window and start recording
-        await showWindowOnCurrentDesktop()
-        setTimeout(() => {
-          console.log('Sending toggle recording event after window show')
-          mainWindow.webContents.send('global-shortcut-toggle-dictation')
-        }, 1000) // Increased delay to ensure React is loaded
-      }
+  // SIMPLE SOLUTION: Pure toggle
+  // Press once = start recording
+  // Press again = stop recording
+  const toggleSuccess = globalShortcut.register('CmdOrCtrl+Shift+D', async () => {
+    console.log('=== Cmd+Shift+D pressed ===')
+
+    if (!mainWindow) return
+
+    if (!isRecording) {
+      // Start recording
+      console.log('Starting recording')
+      isRecording = true
+      mainWindow.webContents.send('global-shortcut-start-recording')
     } else {
-      console.log('Main window is null!')
+      // Stop recording
+      console.log('Stopping recording')
+      isRecording = false
+      mainWindow.webContents.send('global-shortcut-stop-recording')
     }
   })
 
   if (!toggleSuccess) {
-    console.log('Failed to register CmdOrCtrl+Shift+D shortcut')
+    console.log('Failed to register Cmd+Shift+D shortcut')
   } else {
-    console.log('Successfully registered CmdOrCtrl+Shift+D shortcut')
-  }
-
-  // Close/hide window
-  const closeWindowSuccess = globalShortcut.register('CmdOrCtrl+Shift+S', () => {
-    console.log('Global shortcut CmdOrCtrl+Shift+S pressed - hiding window')
-    if (mainWindow && mainWindow.isVisible()) {
-      mainWindow.hide()
-    }
-  })
-
-  if (!closeWindowSuccess) {
-    console.log('Failed to register CmdOrCtrl+Shift+S shortcut')
-  } else {
-    console.log('Successfully registered CmdOrCtrl+Shift+S shortcut')
+    console.log('Successfully registered Cmd+Shift+D - press to start, press again to stop')
   }
 
   // Copy transcription

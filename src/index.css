@@ -5,6 +5,12 @@
 
 /* Base styles */
 @layer base {
+  html,
+  body {
+    border-radius: 36px;
+    overflow: hidden;
+  }
+
   html {
     font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;

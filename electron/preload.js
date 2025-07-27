@@ -37,8 +37,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveWindowPosition: (position) => ipcRenderer.invoke('save-window-position', position),
   loadWindowPosition: () => ipcRenderer.invoke('load-window-position'),
 
+  // Window expansion operations
+  expandWindowForRecording: () => ipcRenderer.invoke('expand-window-for-recording'),
+  shrinkWindowToPill: () => ipcRenderer.invoke('shrink-window-to-pill'),
+
   // Global shortcut events
-  onGlobalShortcutStopDictation: (callback) => ipcRenderer.on('global-shortcut-stop-dictation', callback),
+  onGlobalShortcutStartRecording: (callback) => ipcRenderer.on('global-shortcut-start-recording', callback),
+  onGlobalShortcutStopRecording: (callback) => ipcRenderer.on('global-shortcut-stop-recording', callback),
   onGlobalShortcutToggleDictation: (callback) => ipcRenderer.on('global-shortcut-toggle-dictation', callback),
   onGlobalShortcutCopyTranscription: (callback) => ipcRenderer.on('global-shortcut-copy-transcription', callback),
   onTrayStartDictation: (callback) => ipcRenderer.on('tray-start-dictation', callback),

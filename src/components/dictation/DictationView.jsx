@@ -1,12 +1,15 @@
-import React, { useEffect, useCallback, useRef } from 'react'
+import React, { useEffect, useCallback, useRef, useState } from 'react'
 import useDictationStore from '../../stores/dictationStore'
 import useAudioRecording from '../../hooks/useAudioRecording'
 import SoundWaveVisualizer from './SoundWaveVisualizer'
+import '../../styles/animations.css'
 
 const DictationView = () => {
   console.log('=== DictationView component rendered ===')
 
-  const { error, clearError } = useDictationStore()
+  const { error } = useDictationStore()
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [showProcessingWave, setShowProcessingWave] = useState(false)
 
   // Use the proper audio recording hook
   console.log('=== Calling useAudioRecording hook ===')
@@ -37,10 +40,16 @@ const DictationView = () => {
     recordingStateRef.current = isRecording
   }, [isRecording])
 
-  // Stable callback functions using useCallback
+  // Press and hold behavior handlers
   const handleStartRecording = useCallback(async () => {
     console.log('=== handleStartRecording called ===')
     try {
+      // Expand window first
+      if (window.electronAPI && window.electronAPI.expandWindowForRecording) {
+        await window.electronAPI.expandWindowForRecording()
+        setIsExpanded(true)
+      }
+
       console.log('Calling startRecording...')
       await startRecording()
       console.log('startRecording completed successfully')
@@ -56,53 +65,26 @@ const DictationView = () => {
       console.log('Calling stopRecording...')
       await stopRecording()
 
+      // Shrink window but show processing wave
+      if (window.electronAPI && window.electronAPI.shrinkWindowToPill) {
+        await window.electronAPI.shrinkWindowToPill()
+        setIsExpanded(false)
+        setShowProcessingWave(true) // Show processing wave in pill mode
+      }
+
       console.log('Calling saveRecording...')
       // Save the recording (this will trigger final processing)
       await saveRecording('dictation-session')
       console.log('saveRecording completed successfully')
+
+      // After processing is complete, return to circle
+      setShowProcessingWave(false)
     } catch (error) {
       console.error('Failed to stop recording:', error)
       useDictationStore.getState().setError(`Failed to stop recording: ${error.message}`)
+      setShowProcessingWave(false) // Reset on error
     }
   }, [stopRecording, saveRecording])
-
-  // Main toggle handler with debouncing
-  const handleToggleDictation = useCallback(async () => {
-    console.log('=== handleToggleDictation called ===')
-    console.log('Currently recording:', recordingStateRef.current)
-    console.log('Is handling toggle:', isHandlingToggleRef.current)
-
-    // Prevent multiple rapid triggers
-    if (isHandlingToggleRef.current) {
-      console.log('Already handling toggle, skipping...')
-      return
-    }
-
-    isHandlingToggleRef.current = true
-
-    try {
-      // Use the ref to get the current state instead of the stale closure
-      const currentlyRecording = recordingStateRef.current
-
-      if (currentlyRecording) {
-        console.log('Stopping recording...')
-        await handleStopRecording()
-        // Add a small delay after stopping to ensure cleanup is complete
-        await new Promise((resolve) => setTimeout(resolve, 100))
-      } else {
-        console.log('Starting recording...')
-        await handleStartRecording()
-      }
-    } catch (error) {
-      console.error('Error in toggle dictation:', error)
-    } finally {
-      // Reset the flag after a short delay to prevent rapid re-triggers
-      setTimeout(() => {
-        isHandlingToggleRef.current = false
-        console.log('Toggle handler reset')
-      }, 500)
-    }
-  }, [handleStartRecording, handleStopRecording]) // Remove isRecording from dependencies
 
   // Check AI services status on mount
   useEffect(() => {
@@ -131,14 +113,29 @@ const DictationView = () => {
       return
     }
 
-    console.log('electronAPI is available, setting up toggle dictation listener')
-    // Set up event listeners
-    window.electronAPI.onGlobalShortcutToggleDictation(() => {
-      console.log('=== Received global-shortcut-toggle-dictation event in React ===')
-      console.log('Current recording state:', recordingStateRef.current)
-      console.log('Is handling toggle:', isHandlingToggleRef.current)
-      handleToggleDictation()
-    })
+    console.log('electronAPI is available, setting up recording listeners')
+
+    // Set up start recording listener
+    if (window.electronAPI.onGlobalShortcutStartRecording) {
+      window.electronAPI.onGlobalShortcutStartRecording(() => {
+        console.log('=== Received global-shortcut-start-recording event in React ===')
+        if (!isHandlingToggleRef.current) {
+          isHandlingToggleRef.current = true
+          handleStartRecording()
+        }
+      })
+    }
+
+    // Set up stop recording listener
+    if (window.electronAPI.onGlobalShortcutStopRecording) {
+      window.electronAPI.onGlobalShortcutStopRecording(() => {
+        console.log('=== Received global-shortcut-stop-recording event in React ===')
+        if (isHandlingToggleRef.current) {
+          isHandlingToggleRef.current = false
+          handleStopRecording()
+        }
+      })
+    }
 
     console.log('Event listeners set up successfully')
 
@@ -147,7 +144,7 @@ const DictationView = () => {
       // Note: In a real implementation, you might want to remove listeners
       // but the current electronAPI doesn't expose removeListener methods
     }
-  }, [handleToggleDictation]) // Include the callbacks as dependencies
+  }, [handleStartRecording, handleStopRecording]) // Include the callbacks as dependencies
 
   // Update store with recording state
   useEffect(() => {
@@ -162,44 +159,53 @@ const DictationView = () => {
   }, [recordingError])
 
   return (
-    <div className="w-full h-full flex items-center justify-center bg-black/90 rounded-xl border border-gray-800 shadow-2xl backdrop-blur-sm">
-      {/* Draggable area */}
-      <div className="absolute inset-0 cursor-move rounded-xl" style={{ WebkitAppRegion: 'drag' }} />
+    <div className="w-full h-full flex items-center justify-center bg-black rounded-full">
+      {/* Draggable area - disabled in pill mode */}
+      {isExpanded && <div className="absolute inset-0 cursor-move" style={{ WebkitAppRegion: 'drag' }} />}
 
       {/* Main content */}
-      <div className="relative z-10 flex items-center justify-center w-full h-full px-6">
-        <SoundWaveVisualizer audioLevel={audioLevel} isRecording={isRecording} className="flex-1" />
+      <div className="relative z-10 flex items-center justify-center w-full h-full px-2">
+        {isExpanded ? (
+          // Expanded view with sound wave
+          <div className="flex items-center justify-center rounded-full">
+            <SoundWaveVisualizer audioLevel={audioLevel} isRecording={isRecording} />
 
-        {/* Recording indicator */}
-        {isRecording && (
-          <div className="absolute top-3 right-3 flex items-center space-x-2">
-            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-            <span className="text-red-400 text-xs font-medium">REC</span>
+            {/* Processing indicator */}
+            {isProcessing && (
+              <div className="absolute bottom-1 left-1 flex items-center space-x-1">
+                <div className="w-0.5 h-0.5 bg-blue-400 rounded-full animate-pulse" />
+                <div
+                  className="w-0.5 h-0.5 bg-blue-400 rounded-full animate-pulse"
+                  style={{ animationDelay: '0.2s' }}
+                />
+                <div
+                  className="w-0.5 h-0.5 bg-blue-400 rounded-full animate-pulse"
+                  style={{ animationDelay: '0.4s' }}
+                />
+                <span className="text-blue-400 text-xs ml-1">Processing...</span>
+              </div>
+            )}
           </div>
-        )}
-
-        {/* Processing indicator */}
-        {isProcessing && (
-          <div className="absolute bottom-3 left-3 flex items-center space-x-1">
-            <div className="w-1 h-1 bg-blue-400 rounded-full animate-pulse" />
-            <div className="w-1 h-1 bg-blue-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-            <div className="w-1 h-1 bg-blue-400 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
-            <span className="text-blue-400 text-xs ml-1">Processing...</span>
+        ) : (
+          // Pill mode - show different states
+          <div className="w-full h-full flex items-center justify-center">
+            {showProcessingWave ? (
+              // Processing state - waving loader animation
+              <div className="flex items-center space-x-0.5">
+                <div className="w-0.5 h-1 bg-blue-400 rounded-full wave-bar" style={{ animationDelay: '0ms' }} />
+                <div className="w-0.5 h-1 bg-blue-400 rounded-full wave-bar" style={{ animationDelay: '100ms' }} />
+                <div className="w-0.5 h-1 bg-blue-400 rounded-full wave-bar" style={{ animationDelay: '200ms' }} />
+                <div className="w-0.5 h-1 bg-blue-400 rounded-full wave-bar" style={{ animationDelay: '300ms' }} />
+                <div className="w-0.5 h-1 bg-blue-400 rounded-full wave-bar" style={{ animationDelay: '400ms' }} />
+                <div className="w-0.5 h-1 bg-blue-400 rounded-full wave-bar" style={{ animationDelay: '500ms' }} />
+              </div>
+            ) : (
+              // Default state - simple circle
+              <div className="w-3 h-3 bg-gray-700 rounded-full" />
+            )}
           </div>
         )}
       </div>
-
-      {/* Error Display - minimal */}
-      {(error || recordingError) && (
-        <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2">
-          <div className="bg-red-900/95 text-red-200 text-xs px-3 py-1.5 rounded-lg border border-red-700/50 max-w-xs truncate">
-            <span>{error || recordingError}</span>
-            <button onClick={clearError} className="ml-2 text-red-300 hover:text-red-100 text-xs font-bold">
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

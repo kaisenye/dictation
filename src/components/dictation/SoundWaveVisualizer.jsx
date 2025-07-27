@@ -4,13 +4,12 @@ const SoundWaveVisualizer = ({ audioLevel = 0, isRecording = false, className = 
   const canvasRef = useRef(null)
   const animationRef = useRef(null)
   const barsRef = useRef([])
-  
 
-  const BARS_COUNT = 20
-  const BAR_WIDTH = 3
+  const BARS_COUNT = 8
+  const BAR_WIDTH = 4
   const BAR_GAP = 2
-  const MAX_HEIGHT = 30
-  const MIN_HEIGHT = 4
+  const MAX_HEIGHT = 20
+  const MIN_HEIGHT = 3
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -41,7 +40,7 @@ const SoundWaveVisualizer = ({ audioLevel = 0, isRecording = false, className = 
       barsRef.current.forEach((bar, index) => {
         if (isRecording) {
           // Active recording: respond to audio level with some randomness
-          const baseHeight = MIN_HEIGHT + (audioLevel * (MAX_HEIGHT - MIN_HEIGHT))
+          const baseHeight = MIN_HEIGHT + audioLevel * (MAX_HEIGHT - MIN_HEIGHT)
           const randomMultiplier = 0.5 + Math.random() * 1.0
           bar.targetHeight = Math.max(MIN_HEIGHT, baseHeight * randomMultiplier)
         } else {
@@ -64,22 +63,17 @@ const SoundWaveVisualizer = ({ audioLevel = 0, isRecording = false, className = 
         const x = startX + index * (BAR_WIDTH + BAR_GAP)
         const barHeight = Math.min(bar.height, MAX_HEIGHT)
 
-        // Create gradient
-        const gradient = ctx.createLinearGradient(0, centerY - barHeight / 2, 0, centerY + barHeight / 2)
-        
         if (isRecording) {
-          // Brighter red gradient when recording
-          gradient.addColorStop(0, '#ff5555')
-          gradient.addColorStop(0.5, '#ef4444')
-          gradient.addColorStop(1, '#dc2626')
+          // Simple white color when recording
+          ctx.fillStyle = '#ffffff'
         } else {
           // Subtle gray gradient when idle
+          const gradient = ctx.createLinearGradient(0, centerY - barHeight / 2, 0, centerY + barHeight / 2)
           gradient.addColorStop(0, '#9ca3af')
           gradient.addColorStop(0.5, '#6b7280')
           gradient.addColorStop(1, '#4b5563')
+          ctx.fillStyle = gradient
         }
-
-        ctx.fillStyle = gradient
         ctx.fillRect(x, centerY - barHeight / 2, BAR_WIDTH, barHeight)
       })
 
@@ -96,19 +90,10 @@ const SoundWaveVisualizer = ({ audioLevel = 0, isRecording = false, className = 
   }, [audioLevel, isRecording])
 
   return (
-    <div className={`flex items-center justify-center ${className}`}>
-      <canvas
-        ref={canvasRef}
-        width={240}
-        height={40}
-        className="rounded-lg bg-black border border-gray-700"
-      />
+    <div className={`flex items-center justify-center rounded-full ${className}`}>
+      <canvas ref={canvasRef} width={100} height={50} />
       {/* Debug fallback */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <span className="text-xs text-gray-500">
-          {isRecording ? 'Recording...' : 'Ready'}
-        </span>
-      </div>
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none"></div>
     </div>
   )
 }
