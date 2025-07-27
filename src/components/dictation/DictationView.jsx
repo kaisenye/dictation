@@ -1,25 +1,18 @@
-import React, { useEffect, useState } from 'react'
-import { Mic, MicOff, Copy, Settings, X, Check } from 'lucide-react'
+import React, { useEffect, useCallback, useRef, useState } from 'react'
 import useDictationStore from '../../stores/dictationStore'
 import useAudioRecording from '../../hooks/useAudioRecording'
-import TranscriptionDisplay from './TranscriptionDisplay'
-import DictationControls from './DictationControls'
+import SoundWaveVisualizer from './SoundWaveVisualizer'
+import '../../styles/animations.css'
 
 const DictationView = () => {
-  const {
-    transcription,
-    processedTranscription,
-    useCase,
-    wordCount,
-    getFormattedDuration,
-    getTranscriptionToCopy,
-    error,
-    clearError,
-    setUseCase,
-    reset,
-  } = useDictationStore()
+  console.log('=== DictationView component rendered ===')
+
+  const { error } = useDictationStore()
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [showProcessingWave, setShowProcessingWave] = useState(false)
 
   // Use the proper audio recording hook
+  console.log('=== Calling useAudioRecording hook ===')
   const {
     isRecording,
     isProcessing,
@@ -30,70 +23,128 @@ const DictationView = () => {
     saveRecording,
   } = useAudioRecording()
 
-  // Copy button state
-  const [copied, setCopied] = useState(false)
+  console.log('=== useAudioRecording returned ===', { isRecording, isProcessing, audioLevel, recordingError })
 
-  // Handle global shortcuts
+  // Log errors
+  if (error) console.log('Store error:', error)
+  if (recordingError) console.log('Recording error:', recordingError)
+
+  // Ref to track if we're currently handling a toggle to prevent double-triggers
+  const isHandlingToggleRef = useRef(false)
+
+  // Ref to track the latest recording state to prevent stale closures
+  const recordingStateRef = useRef(isRecording)
+
+  // Update the ref whenever isRecording changes
   useEffect(() => {
-    if (window.electronAPI) {
-      const handleStopDictation = () => {
-        if (isRecording) {
-          handleStopRecording()
-        }
-      }
-
-      const handleCopyTranscription = () => {
-        copyToClipboard()
-      }
-
-      window.electronAPI.onGlobalShortcutStopDictation(handleStopDictation)
-      window.electronAPI.onGlobalShortcutCopyTranscription(handleCopyTranscription)
-
-      return () => {
-        // Cleanup listeners if needed
-      }
-    }
+    recordingStateRef.current = isRecording
   }, [isRecording])
 
-  const copyToClipboard = async () => {
-    const textToCopy = getTranscriptionToCopy()
-    if (textToCopy) {
-      try {
-        await navigator.clipboard.writeText(textToCopy)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000) // Reset after 2 seconds
-        console.log('Transcription copied to clipboard')
-      } catch (error) {
-        console.error('Failed to copy to clipboard:', error)
-      }
-    }
-  }
-
-  const handleStartRecording = async () => {
+  // Press and hold behavior handlers
+  const handleStartRecording = useCallback(async () => {
+    console.log('=== handleStartRecording called ===')
     try {
+      // Expand window first
+      if (window.electronAPI && window.electronAPI.expandWindowForRecording) {
+        await window.electronAPI.expandWindowForRecording()
+        setIsExpanded(true)
+      }
+
+      console.log('Calling startRecording...')
       await startRecording()
+      console.log('startRecording completed successfully')
     } catch (error) {
       console.error('Failed to start recording:', error)
       useDictationStore.getState().setError('Failed to access microphone')
     }
-  }
+  }, [startRecording])
 
-  const handleStopRecording = async () => {
+  const handleStopRecording = useCallback(async () => {
+    console.log('=== handleStopRecording called ===')
     try {
+      console.log('Calling stopRecording...')
       await stopRecording()
+
+      // Shrink window but show processing wave
+      if (window.electronAPI && window.electronAPI.shrinkWindowToPill) {
+        await window.electronAPI.shrinkWindowToPill()
+        setIsExpanded(false)
+        setShowProcessingWave(true) // Show processing wave in pill mode
+      }
+
+      console.log('Calling saveRecording...')
       // Save the recording (this will trigger final processing)
       await saveRecording('dictation-session')
+      console.log('saveRecording completed successfully')
+
+      // After processing is complete, return to circle
+      setShowProcessingWave(false)
     } catch (error) {
       console.error('Failed to stop recording:', error)
-      useDictationStore.getState().setError('Failed to stop recording')
+      useDictationStore.getState().setError(`Failed to stop recording: ${error.message}`)
+      setShowProcessingWave(false) // Reset on error
     }
-  }
+  }, [stopRecording, saveRecording])
 
-  const handleClose = () => {
-    if (window.electronAPI && window.electronAPI.closeWindow) {
-      window.electronAPI.closeWindow()
+  // Check AI services status on mount
+  useEffect(() => {
+    const checkServices = async () => {
+      if (window.electronAPI) {
+        try {
+          const whisperStatus = await window.electronAPI.aiGetStatus()
+          console.log('Whisper service status:', whisperStatus)
+
+          const llamaStatus = await window.electronAPI.llamaGetStatus()
+          console.log('Llama service status:', llamaStatus)
+        } catch (error) {
+          console.error('Error checking service status:', error)
+        }
+      }
     }
-  }
+
+    checkServices()
+  }, [])
+
+  // Set up global shortcuts once on mount
+  useEffect(() => {
+    console.log('=== Setting up event listeners ===')
+    if (!window.electronAPI) {
+      console.warn('electronAPI not available')
+      return
+    }
+
+    console.log('electronAPI is available, setting up recording listeners')
+
+    // Set up start recording listener
+    if (window.electronAPI.onGlobalShortcutStartRecording) {
+      window.electronAPI.onGlobalShortcutStartRecording(() => {
+        console.log('=== Received global-shortcut-start-recording event in React ===')
+        if (!isHandlingToggleRef.current) {
+          isHandlingToggleRef.current = true
+          handleStartRecording()
+        }
+      })
+    }
+
+    // Set up stop recording listener
+    if (window.electronAPI.onGlobalShortcutStopRecording) {
+      window.electronAPI.onGlobalShortcutStopRecording(() => {
+        console.log('=== Received global-shortcut-stop-recording event in React ===')
+        if (isHandlingToggleRef.current) {
+          isHandlingToggleRef.current = false
+          handleStopRecording()
+        }
+      })
+    }
+
+    console.log('Event listeners set up successfully')
+
+    // Cleanup function
+    return () => {
+      // Note: In a real implementation, you might want to remove listeners
+      // but the current electronAPI doesn't expose removeListener methods
+    }
+  }, [handleStartRecording, handleStopRecording]) // Include the callbacks as dependencies
 
   // Update store with recording state
   useEffect(() => {
@@ -108,66 +159,53 @@ const DictationView = () => {
   }, [recordingError])
 
   return (
-    <div className="h-screen flex flex-col bg-gray-800">
-      {/* Header - Simplified draggable area */}
-      <div
-        className="h-8 bg-gray-800 cursor-move hover:bg-gray-700 transition-colors"
-        style={{ WebkitAppRegion: 'drag' }}
-        title="Drag to move window"
-      />
+    <div className="w-full h-full flex items-center justify-center bg-black rounded-full">
+      {/* Draggable area - disabled in pill mode */}
+      {isExpanded && <div className="absolute inset-0 cursor-move" style={{ WebkitAppRegion: 'drag' }} />}
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col p-4">
-        {/* Transcription Display */}
-        <div className="flex-1 bg-gray-800 rounded-lg border border-gray-600 mb-4">
-          <TranscriptionDisplay
-            transcription={transcription}
-            processedTranscription={processedTranscription}
-            isRecording={isRecording}
-            isProcessing={isProcessing}
-            audioLevel={audioLevel}
-          />
-        </div>
+      {/* Main content */}
+      <div className="relative z-10 flex items-center justify-center w-full h-full px-2">
+        {isExpanded ? (
+          // Expanded view with sound wave
+          <div className="flex items-center justify-center rounded-full">
+            <SoundWaveVisualizer audioLevel={audioLevel} isRecording={isRecording} />
 
-        {/* Controls and Stats */}
-        <div className="flex items-center justify-between">
-          <DictationControls isRecording={isRecording} onStart={handleStartRecording} onStop={handleStopRecording} />
-
-          <div className="flex items-center space-x-4 text-sm text-gray-300">
-            <span>{wordCount} words</span>
-            <span>{getFormattedDuration()}</span>
-            <button
-              onClick={copyToClipboard}
-              disabled={!transcription && !processedTranscription}
-              className="flex items-center space-x-1 px-3 py-1.5 bg-gray-700 text-gray-200 rounded-lg hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors border border-gray-600"
-            >
-              {copied ? (
-                <>
-                  <Check className="w-4 h-4" />
-                  <span>Copied</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-4 h-4" />
-                  <span>Copy</span>
-                </>
-              )}
-            </button>
+            {/* Processing indicator */}
+            {isProcessing && (
+              <div className="absolute bottom-1 left-1 flex items-center space-x-1">
+                <div className="w-0.5 h-0.5 bg-blue-400 rounded-full animate-pulse" />
+                <div
+                  className="w-0.5 h-0.5 bg-blue-400 rounded-full animate-pulse"
+                  style={{ animationDelay: '0.2s' }}
+                />
+                <div
+                  className="w-0.5 h-0.5 bg-blue-400 rounded-full animate-pulse"
+                  style={{ animationDelay: '0.4s' }}
+                />
+                <span className="text-blue-400 text-xs ml-1">Processing...</span>
+              </div>
+            )}
           </div>
-        </div>
+        ) : (
+          // Pill mode - show different states
+          <div className="w-full h-full flex items-center justify-center">
+            {showProcessingWave ? (
+              // Processing state - waving loader animation
+              <div className="flex items-center space-x-0.5">
+                <div className="w-0.5 h-1 bg-blue-400 rounded-full wave-bar" style={{ animationDelay: '0ms' }} />
+                <div className="w-0.5 h-1 bg-blue-400 rounded-full wave-bar" style={{ animationDelay: '100ms' }} />
+                <div className="w-0.5 h-1 bg-blue-400 rounded-full wave-bar" style={{ animationDelay: '200ms' }} />
+                <div className="w-0.5 h-1 bg-blue-400 rounded-full wave-bar" style={{ animationDelay: '300ms' }} />
+                <div className="w-0.5 h-1 bg-blue-400 rounded-full wave-bar" style={{ animationDelay: '400ms' }} />
+                <div className="w-0.5 h-1 bg-blue-400 rounded-full wave-bar" style={{ animationDelay: '500ms' }} />
+              </div>
+            ) : (
+              // Default state - simple circle
+              <div className="w-3 h-3 bg-gray-700 rounded-full" />
+            )}
+          </div>
+        )}
       </div>
-
-      {/* Error Display */}
-      {error && (
-        <div className="bg-red-900 border-t border-red-700 px-4 py-3">
-          <div className="flex items-center justify-between">
-            <span className="text-red-200 text-sm">{error}</span>
-            <button onClick={clearError} className="text-red-300 hover:text-red-100 transition-colors">
-              ×
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

@@ -1,10 +1,14 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 
 const useAudioRecording = () => {
+  console.log('=== useAudioRecording hook initialized ===')
+
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState(null)
   const [audioLevel, setAudioLevel] = useState(0)
+
+  console.log('=== Hook state initialized ===', { isRecording, isProcessing, error, audioLevel })
 
   const mediaRecorderRef = useRef(null)
   const streamRef = useRef(null)
@@ -13,8 +17,7 @@ const useAudioRecording = () => {
   const animationFrameRef = useRef(null)
   const chunksRef = useRef([])
   const recordingStartTimeRef = useRef(null)
-  const totalProcessedTimeRef = useRef(0)
-  const transcriptionBufferRef = useRef('') // Buffer for accumulating transcription
+  const allAudioDataRef = useRef([])
 
   // Audio level monitoring with improved sensitivity
   const updateAudioLevel = useCallback(() => {
@@ -51,40 +54,26 @@ const useAudioRecording = () => {
 
     // Threshold for speech detection (adjust as needed)
     const speechThreshold = 0.01
-    const hasSpeechDetected = rms > speechThreshold
-
-    // Debug logging for first few chunks
-    if (Math.random() < 0.1) {
-      // Log 10% of the time to avoid spam
-      console.log(`Audio RMS: ${rms.toFixed(4)}, Threshold: ${speechThreshold}, Has Speech: ${hasSpeechDetected}`)
-    }
-
-    return hasSpeechDetected
+    return rms > speechThreshold
   }, [])
 
-  // Update transcription in the store
-  const updateTranscription = useCallback((text) => {
-    // Accumulate transcription text
-    transcriptionBufferRef.current += text + ' '
+  // No longer needed - we'll process all audio at once at the end
 
-    // Update the dictation store
-    if (window.useDictationStore) {
-      window.useDictationStore.getState().updateTranscription(transcriptionBufferRef.current.trim())
-    }
-  }, [])
-
-  // Start recording
+  // Start recording with improved logic
   const startRecording = useCallback(async () => {
+    console.log('=== useAudioRecording startRecording called ===')
+    console.log('Current isRecording state:', isRecording)
     try {
+      if (isRecording) {
+        console.warn('Recording is already active')
+        return
+      }
+
       setError(null)
-
-      // Reset transcription buffer
-      transcriptionBufferRef.current = ''
-
-      // Initialize timestamp tracking
+      allAudioDataRef.current = []
       recordingStartTimeRef.current = Date.now()
-      totalProcessedTimeRef.current = 0
 
+      console.log('Requesting microphone access...')
       // Request microphone access with better audio settings
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -96,12 +85,7 @@ const useAudioRecording = () => {
           volume: 1.0,
         },
       })
-
-      console.log('Microphone stream obtained:', {
-        tracks: stream.getTracks().length,
-        audioTracks: stream.getAudioTracks().length,
-        settings: stream.getAudioTracks()[0]?.getSettings(),
-      })
+      console.log('Microphone access granted successfully')
 
       streamRef.current = stream
 
@@ -129,104 +113,13 @@ const useAudioRecording = () => {
       mediaRecorderRef.current = mediaRecorder
       chunksRef.current = []
 
-      // For real-time processing, we'll use a different approach
-      // Set up ScriptProcessorNode for raw audio data
-      const bufferSize = 4096
-      const processor = audioContextRef.current.createScriptProcessor(bufferSize, 1, 1)
-      let audioBuffer = []
-      let lastProcessTime = Date.now()
-      let consecutiveSilenceChunks = 0
-      const maxSilenceChunks = 3 // Allow up to 3 consecutive silent chunks
+      // Simple audio collection - store all audio data for final processing
+      const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1)
 
-      processor.onaudioprocess = async (event) => {
-        const inputBuffer = event.inputBuffer
-        const inputData = inputBuffer.getChannelData(0)
-
-        // Collect audio data
-        audioBuffer.push(...inputData)
-
-        // Process every 3 seconds of audio (48000 samples at 16kHz) - longer chunks for better context
-        if (audioBuffer.length >= 48000) {
-          const now = Date.now()
-          if (now - lastProcessTime >= 2000) {
-            // Minimum 2 second interval
-            lastProcessTime = now
-
-            // Check if this chunk contains speech
-            const currentChunk = audioBuffer.slice(-48000)
-            const hasSpeechInChunk = hasSpeech(currentChunk)
-
-            if (hasSpeechInChunk) {
-              consecutiveSilenceChunks = 0 // Reset silence counter
-            } else {
-              consecutiveSilenceChunks++
-            }
-
-            // Only process if we have speech or haven't had too many silent chunks
-            if (hasSpeechInChunk || consecutiveSilenceChunks <= maxSilenceChunks) {
-              try {
-                // Check if AI service is initialized first
-                if (window.electronAPI) {
-                  const status = await window.electronAPI.aiGetStatus()
-                  if (!status.initialized) {
-                    console.log('AI service not initialized, attempting to initialize...')
-                    const initResult = await window.electronAPI.aiInitialize()
-                    if (!initResult.success) {
-                      throw new Error('Failed to initialize AI service: ' + initResult.error)
-                    }
-                  }
-
-                  setIsProcessing(true)
-
-                  // Use the full 3-second chunk for better context
-                  const wavBuffer = createWavBuffer(currentChunk, 16000)
-                  const uint8Array = new Uint8Array(wavBuffer)
-                  const hexString = Array.from(uint8Array)
-                    .map((byte) => byte.toString(16).padStart(2, '0'))
-                    .join('')
-
-                  console.log(
-                    `Processing audio segment: ${wavBuffer.byteLength} bytes WAV, hex length: ${hexString.length}, hasSpeech: ${hasSpeechInChunk}`
-                  )
-
-                  const result = await window.electronAPI.processAudioChunk(hexString, 16000)
-
-                  console.log('Whisper.cpp result:', result)
-
-                  if (result && result.success && result.result && result.result.text) {
-                    // Only update transcription if we got meaningful text (not just blank audio)
-                    const text = result.result.text.trim()
-                    if (text && text !== '[BLANK_AUDIO]' && text.length > 0) {
-                      console.log('Raw Whisper.cpp text:', result.result.text)
-                      console.log('Raw Whisper.cpp segments:', result.result.segments)
-
-                      // Update transcription in the store (no refinement during recording)
-                      updateTranscription(result.result.text)
-
-                      console.log('Real-time transcription updated:', result.result.text)
-                    } else {
-                      console.log('Skipping blank or empty transcription result')
-                    }
-                  }
-
-                  // Update total processed time based on actual audio chunk duration
-                  // Each chunk is 3 seconds (48000 samples at 16kHz)
-                  totalProcessedTimeRef.current += 3
-                }
-              } catch (err) {
-                console.error('Error processing audio chunk:', err)
-                setError(`Audio processing error: ${err.message}`)
-              } finally {
-                setIsProcessing(false)
-              }
-            } else {
-              console.log('Skipping processing due to consecutive silence chunks:', consecutiveSilenceChunks)
-            }
-          }
-
-          // Keep only the last 3 seconds of audio data for context
-          audioBuffer = audioBuffer.slice(-48000)
-        }
+      processor.onaudioprocess = (event) => {
+        const inputData = event.inputBuffer.getChannelData(0)
+        // Store all audio data for final processing
+        allAudioDataRef.current.push(...inputData)
       }
 
       source.connect(processor)
@@ -239,17 +132,6 @@ const useAudioRecording = () => {
         }
       }
 
-      // Handle recording stop
-      mediaRecorder.onstop = () => {
-        setIsRecording(false)
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current)
-        }
-        if (processor) {
-          processor.disconnect()
-        }
-      }
-
       // Handle errors
       mediaRecorder.onerror = (event) => {
         console.error('MediaRecorder error:', event.error)
@@ -258,12 +140,14 @@ const useAudioRecording = () => {
 
       // Start recording with longer chunks for full recording
       mediaRecorder.start(10000) // 10 second chunks for full recording
+      console.log('Setting isRecording to true')
       setIsRecording(true)
+      console.log('Recording started successfully!')
     } catch (err) {
       console.error('Error starting recording:', err)
       setError(err.message)
     }
-  }, [updateAudioLevel, updateTranscription, hasSpeech])
+  }, [updateAudioLevel, isRecording])
 
   // Helper function to create WAV buffer from float32 audio data
   const createWavBuffer = (audioData, sampleRate) => {
@@ -304,9 +188,51 @@ const useAudioRecording = () => {
   }
 
   // Stop recording
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && isRecording) {
+  const stopRecording = useCallback(async () => {
+    try {
+      if (!mediaRecorderRef.current) {
+        console.warn('No MediaRecorder to stop')
+        setIsRecording(false)
+        return
+      }
+
+      // Check if we're already in the process of stopping
+      if (mediaRecorderRef.current.state === 'inactive') {
+        console.warn('MediaRecorder is already stopped')
+        setIsRecording(false)
+        return
+      }
+
+      // Create a promise to wait for the MediaRecorder to stop
+      const stopPromise = new Promise((resolve, reject) => {
+        const originalOnStop = mediaRecorderRef.current.onstop
+        const originalOnError = mediaRecorderRef.current.onerror
+
+        mediaRecorderRef.current.onstop = () => {
+          setIsRecording(false)
+          if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current)
+          }
+          // Restore original handlers
+          mediaRecorderRef.current.onstop = originalOnStop
+          mediaRecorderRef.current.onerror = originalOnError
+          resolve()
+        }
+
+        mediaRecorderRef.current.onerror = (event) => {
+          console.error('MediaRecorder error during stop:', event.error)
+          // Restore original handlers
+          mediaRecorderRef.current.onstop = originalOnStop
+          mediaRecorderRef.current.onerror = originalOnError
+          reject(new Error(`MediaRecorder error: ${event.error.message}`))
+        }
+      })
+
+      // Stop the MediaRecorder
       mediaRecorderRef.current.stop()
+
+      // Wait for the MediaRecorder to actually stop
+      await stopPromise
 
       // Clean up streams and contexts
       if (streamRef.current) {
@@ -319,73 +245,144 @@ const useAudioRecording = () => {
         audioContextRef.current = null
       }
 
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-        animationFrameRef.current = null
-      }
-
       // Reset timestamp tracking
       recordingStartTimeRef.current = null
-      totalProcessedTimeRef.current = 0
 
       setAudioLevel(0)
+      mediaRecorderRef.current = null
+    } catch (error) {
+      console.error('Error stopping recording:', error)
+      setError(`Failed to stop recording: ${error.message}`)
+      // Force cleanup even if there was an error
+      setIsRecording(false)
+      setAudioLevel(0)
+      mediaRecorderRef.current = null
+      throw error
     }
-  }, [isRecording])
+  }, []) // Remove isRecording from dependencies to prevent recreation
 
-  // Save complete recording
+  // Save complete recording and process all audio at once
   const saveRecording = useCallback(async (meetingId) => {
-    if (chunksRef.current.length === 0) {
+    console.log('=== saveRecording called ===')
+    console.log('Audio data length:', allAudioDataRef.current.length)
+
+    if (allAudioDataRef.current.length === 0) {
+      console.warn('No audio data to save')
       throw new Error('No audio data to save')
     }
 
     try {
-      console.log(`Recording completed for meeting ${meetingId}`)
-      console.log(`Number of audio chunks: ${chunksRef.current.length}`)
+      setIsProcessing(true)
 
-      // Final AI refinement of complete transcription
-      try {
-        if (window.electronAPI && window.electronAPI.llamaGetStatus) {
-          const llamaStatus = await window.electronAPI.llamaGetStatus()
-          if (llamaStatus.success && llamaStatus.initialized) {
-            const currentTranscription = transcriptionBufferRef.current.trim()
-            if (currentTranscription) {
-              console.log('Performing final AI refinement of complete transcription...')
-              const finalRefinePrompt = `
-                  You are a writing assistant. 
-                  Clean up the following voice transcription by correcting grammar, 
-                  punctuation, and formatting. Preserve the speaker’s intent and tone. 
-                  Return ONLY the revised text—no explanations, no headings, and no comments.
-                   The output should be ready to copy into an email, website inputs, document, or message:
-                  "${currentTranscription}"`
-              const finalRefinedResult = await window.electronAPI.llamaAnswerQuestion(
-                finalRefinePrompt,
-                meetingId,
-                [],
-                []
-              )
-              if (finalRefinedResult.success && finalRefinedResult.answer) {
-                console.log('Final Llama.cpp refinement result:', finalRefinedResult.answer)
-                // Replace the transcription with refined version
-                if (window.useDictationStore) {
-                  window.useDictationStore.getState().updateTranscription(finalRefinedResult.answer)
-                  window.useDictationStore.getState().setProcessedTranscription('')
+      // Process all collected audio data
+      const audioData = allAudioDataRef.current
+      const sampleRate = 16000
+
+      console.log(`Processing ${audioData.length} audio samples at ${sampleRate}Hz`)
+
+      // Initialize AI service if needed
+      if (window.electronAPI) {
+        const status = await window.electronAPI.aiGetStatus()
+        if (!status.initialized) {
+          console.log('Initializing AI service...')
+          const initResult = await window.electronAPI.aiInitialize()
+          if (!initResult.success) {
+            throw new Error('Failed to initialize AI service: ' + initResult.error)
+          }
+        }
+
+        // Convert audio data to WAV format and process
+        console.log('Converting audio to WAV format...')
+        const wavBuffer = createWavBuffer(audioData, sampleRate)
+        const uint8Array = new Uint8Array(wavBuffer)
+        const hexString = Array.from(uint8Array)
+          .map((byte) => byte.toString(16).padStart(2, '0'))
+          .join('')
+
+        console.log('Sending audio to Whisper for transcription...')
+        const result = await window.electronAPI.processAudioChunk(hexString, sampleRate)
+        console.log('Whisper result:', result)
+
+        let finalText = ''
+        if (result && result.success && result.result && result.result.text) {
+          finalText = result.result.text.trim()
+          console.log('Raw transcription:', finalText)
+
+          // AI refinement with Llama if available
+          if (window.electronAPI.llamaGetStatus && finalText && finalText !== '[BLANK_AUDIO]') {
+            try {
+              console.log('Checking Llama status for refinement...')
+              const llamaStatus = await window.electronAPI.llamaGetStatus()
+              if (llamaStatus.success && llamaStatus.initialized) {
+                console.log('Refining text with Llama...')
+                const prompt = `Clean up the following voice transcription by correcting grammar, punctuation, and formatting. Return ONLY the revised text—no explanations, no headings, and no comments:\n"${finalText}"`
+                const llamaResult = await window.electronAPI.llamaAnswerQuestion(prompt, meetingId, [], [])
+                if (
+                  llamaResult.success &&
+                  llamaResult.answer &&
+                  llamaResult.answer.trim() &&
+                  !llamaResult.answer.includes(prompt)
+                ) {
+                  finalText = llamaResult.answer.trim()
+                  console.log('Refined text:', finalText)
                 }
               }
+            } catch (refinementError) {
+              console.warn('AI refinement failed:', refinementError.message)
             }
           }
         }
-      } catch (finalRefineError) {
-        console.warn('Final AI refinement failed:', finalRefineError.message)
+
+        // Auto-paste to focused input field
+        if (finalText && finalText !== '[BLANK_AUDIO]') {
+          console.log('Pasting text to focused input:', finalText)
+          await pasteToFocusedInput(finalText)
+        }
+
+        // Update the store
+        if (window.useDictationStore) {
+          window.useDictationStore.getState().updateTranscription(finalText)
+        }
+
+        // Clear audio data
+        allAudioDataRef.current = []
+        chunksRef.current = []
+
+        console.log('Recording processing completed successfully')
+        return { success: true, result: { text: finalText } }
       }
-
-      // Clear chunks since transcription was saved live
-      chunksRef.current = []
-
-      // Return success since transcription was already saved during recording
-      return { success: true, result: { text: 'Transcription saved during recording' } }
     } catch (err) {
-      console.error('Error completing recording:', err)
+      console.error('Error processing complete recording:', err)
       throw err
+    } finally {
+      setIsProcessing(false)
+    }
+  }, [])
+
+  // Helper function to paste text to focused input
+  const pasteToFocusedInput = useCallback(async (text) => {
+    try {
+      if (window.electronAPI && window.electronAPI.pasteToFocusedApp) {
+        console.log('Pasting to focused app:', text)
+        const result = await window.electronAPI.pasteToFocusedApp(text)
+
+        if (result.success) {
+          console.log('Text pasted successfully to focused app')
+          // Show brief notification
+          if (window.electronAPI.showNotification) {
+            await window.electronAPI.showNotification('Dictation Complete', `"${text}"`)
+          }
+        } else {
+          console.warn('Failed to paste to focused app:', result.error)
+          console.log('Transcribed text (copy manually):', text)
+        }
+      } else {
+        console.warn('pasteToFocusedApp not available')
+        console.log('Transcribed text (copy manually):', text)
+      }
+    } catch (error) {
+      console.warn('Failed to paste to focused input:', error.message)
+      console.log('Transcribed text (copy manually):', text)
     }
   }, [])
 
