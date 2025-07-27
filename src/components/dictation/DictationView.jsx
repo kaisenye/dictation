@@ -93,9 +93,6 @@ const DictationView = () => {
         try {
           const whisperStatus = await window.electronAPI.aiGetStatus()
           console.log('Whisper service status:', whisperStatus)
-
-          const llamaStatus = await window.electronAPI.llamaGetStatus()
-          console.log('Llama service status:', llamaStatus)
         } catch (error) {
           console.error('Error checking service status:', error)
         }

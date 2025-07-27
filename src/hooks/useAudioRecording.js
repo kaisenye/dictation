@@ -308,27 +308,41 @@ const useAudioRecording = () => {
           finalText = result.result.text.trim()
           console.log('Raw transcription:', finalText)
 
+          // TODO: LLaMA.cpp refinement temporarily disabled due to hallucination issues
+          // Current model (TinyLlama-1.1B-Chat) is a chat model that generates conversation
+          // instead of simple grammar correction. Need to:
+          // 1. Download a base model (non-chat) like llama-2-7b.Q4_K_M.gguf, OR
+          // 2. Use a grammar-specific model, OR
+          // 3. Improve prompt engineering for chat models
+          // Re-enable by changing ENABLE_LLAMA_REFINEMENT to true
+          const ENABLE_LLAMA_REFINEMENT = false
+
           // AI refinement with Llama if available
-          if (window.electronAPI.llamaGetStatus && finalText && finalText !== '[BLANK_AUDIO]') {
+          if (
+            ENABLE_LLAMA_REFINEMENT &&
+            window.electronAPI.llamaRefineTranscript &&
+            finalText &&
+            finalText !== '[BLANK_AUDIO]'
+          ) {
             try {
-              console.log('Checking Llama status for refinement...')
-              const llamaStatus = await window.electronAPI.llamaGetStatus()
-              if (llamaStatus.success && llamaStatus.initialized) {
-                console.log('Refining text with Llama...')
-                const prompt = `Clean up the following voice transcription by correcting grammar, punctuation, and formatting. Return ONLY the revised text—no explanations, no headings, and no comments:\n"${finalText}"`
-                const llamaResult = await window.electronAPI.llamaAnswerQuestion(prompt, meetingId, [], [])
-                if (
-                  llamaResult.success &&
-                  llamaResult.answer &&
-                  llamaResult.answer.trim() &&
-                  !llamaResult.answer.includes(prompt)
-                ) {
-                  finalText = llamaResult.answer.trim()
-                  console.log('Refined text:', finalText)
+              console.log('Refining text with LLaMA.cpp...', finalText)
+              const llamaResult = await window.electronAPI.llamaRefineTranscript(finalText)
+              console.log('LLaMA refinement result:', llamaResult)
+
+              if (llamaResult.success && llamaResult.refinedTranscript && llamaResult.refinedTranscript.trim()) {
+                const originalText = finalText
+                finalText = llamaResult.refinedTranscript.trim()
+                console.log('Text refined successfully:')
+                console.log('  Original:', originalText)
+                console.log('  Refined: ', finalText)
+              } else {
+                console.log('LLaMA refinement returned no useful result:', llamaResult)
+                if (llamaResult.error) {
+                  console.log('LLaMA error:', llamaResult.error)
                 }
               }
             } catch (refinementError) {
-              console.warn('AI refinement failed:', refinementError.message)
+              console.warn('LLaMA refinement failed, using original text:', refinementError.message)
             }
           }
         }

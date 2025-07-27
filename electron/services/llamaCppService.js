@@ -3,6 +3,8 @@ const path = require('path')
 const { EventEmitter } = require('events')
 const fs = require('fs').promises
 const os = require('os')
+const https = require('https')
+const http = require('http')
 
 class LlamaCppService extends EventEmitter {
   constructor() {
@@ -265,7 +267,52 @@ class LlamaCppService extends EventEmitter {
    * Build prompt for transcript refinement
    */
   buildTranscriptRefinementPrompt(transcript) {
-    return `Fix grammar, spelling, and punctuation in this transcript. Return only the corrected text without greetings, thanks, or additional comments:\n\n${transcript}`
+    return `Fix grammar and punctuation: "${transcript}"\nCorrected: "`
+  }
+
+  /**
+   * Make HTTP request using native Node.js http module
+   */
+  async makeHttpRequest(payload) {
+    return new Promise((resolve, reject) => {
+      const postData = JSON.stringify(payload)
+
+      const options = {
+        hostname: '127.0.0.1',
+        port: this.serverPort,
+        path: '/completion',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData),
+        },
+      }
+
+      const req = http.request(options, (res) => {
+        let responseData = ''
+
+        res.on('data', (chunk) => {
+          responseData += chunk
+        })
+
+        res.on('end', () => {
+          resolve({
+            status: res.statusCode,
+            statusText: res.statusMessage,
+            ok: res.statusCode >= 200 && res.statusCode < 300,
+            headers: new Map(Object.entries(res.headers)),
+            text: async () => responseData,
+          })
+        })
+      })
+
+      req.on('error', (error) => {
+        reject(error)
+      })
+
+      req.write(postData)
+      req.end()
+    })
   }
 
   /**
@@ -277,22 +324,24 @@ class LlamaCppService extends EventEmitter {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`Making Llama.cpp request (attempt ${attempt}/${maxRetries})`)
+        console.log('\n=== LLAMA.CPP REQUEST ===')
+        console.log(`Attempt: ${attempt}/${maxRetries}`)
+        console.log(`Prompt: "${prompt.substring(0, 100) + (prompt.length > 100 ? '...' : '')}"`)
+        console.log('Request URL:', `http://127.0.0.1:${this.serverPort}/completion`)
 
-        const response = await fetch(`http://127.0.0.1:${this.serverPort}/completion`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            prompt: prompt,
-            n_predict: 256,
-            temperature: 0.4,
-            top_p: 0.8,
-            repeat_penalty: 1.0,
-            stop: ['\n\n'],
-          }),
-        })
+        const requestPayload = {
+          prompt: prompt,
+          n_predict: 20, // Very short to prevent rambling
+          temperature: 0.05, // Very low temperature for minimal creativity
+          top_p: 0.3, // Very focused sampling
+          repeat_penalty: 1.3, // Higher penalty to prevent repetition
+          stop: ['"', '\n', 'Original:', 'Corrected:'],
+        }
+
+        // Use native Node.js HTTP instead of fetch
+        console.log('Making HTTP request...')
+        const response = await this.makeHttpRequest(requestPayload)
+        console.log('HTTP request completed')
 
         if (response.status === 503) {
           console.log(`Server returned 503 (attempt ${attempt}), retrying...`)
@@ -301,15 +350,57 @@ class LlamaCppService extends EventEmitter {
           continue
         }
 
+        console.log(`Response status: ${response.status} ${response.statusText}`)
+        console.log(`Response headers:`, Object.fromEntries(response.headers.entries()))
+
         if (!response.ok) {
+          const errorText = await response.text()
+          console.log(`Error response body: ${errorText}`)
           throw new Error(`Server request failed: ${response.status} ${response.statusText}`)
         }
 
-        const data = await response.json()
-        const content = data.content || data.response || 'No response generated'
+        // Try to get the response text first
+        const responseText = await response.text()
+        console.log('\n=== LLAMA.CPP RESPONSE ===')
+        console.log('Status:', response.status, response.statusText)
+        console.log('Raw Response Text:', responseText)
 
-        console.log(`Llama.cpp request successful (attempt ${attempt})`)
-        return content
+        // Try to parse as JSON
+        let data
+        try {
+          data = JSON.parse(responseText)
+          console.log('Parsed JSON Data:')
+          console.log(JSON.stringify(data, null, 2))
+        } catch (parseError) {
+          console.log('Failed to parse as JSON:', parseError.message)
+          console.log('Treating as plain text response')
+          data = { content: responseText }
+        }
+
+        // LLaMA.cpp server response can have different structures
+        let content = ''
+        if (data.content) {
+          content = data.content
+        } else if (data.choices && data.choices[0] && data.choices[0].text) {
+          content = data.choices[0].text
+        } else if (data.text) {
+          content = data.text
+        } else if (data.result) {
+          content = data.result
+        } else if (data.output) {
+          content = data.output
+        } else if (typeof data === 'string') {
+          content = data
+        } else {
+          console.error('Unknown LLaMA.cpp response structure:', data)
+          content = 'No response generated'
+        }
+
+        console.log('\n=== LLAMA.CPP RESULT ===')
+        console.log(`Success on attempt ${attempt}`)
+        console.log(`Extracted content: "${content}"`)
+        console.log('========================\n')
+        return content.trim()
       } catch (error) {
         lastError = error
         console.error(`Llama.cpp request failed (attempt ${attempt}):`, error.message)

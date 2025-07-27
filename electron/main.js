@@ -416,11 +416,17 @@ function setupIpcHandlers() {
 
   // LLM Service - Single endpoint for transcript refinement
   ipcMain.handle('llama-refine-transcript', async (event, transcript) => {
+    console.log('\n🔄 LLAMA REFINEMENT REQUEST')
+    console.log('Original transcript:', `"${transcript}"`)
     try {
       const refinedTranscript = await llamaCppService.refineTranscript(transcript)
+      console.log('✅ LLAMA REFINEMENT SUCCESS')
+      console.log('Refined transcript:', `"${refinedTranscript}"`)
+      console.log('================================\n')
       return { success: true, refinedTranscript }
     } catch (error) {
-      console.error('Failed to refine transcript:', error)
+      console.error('❌ LLAMA REFINEMENT FAILED:', error.message)
+      console.log('================================\n')
       return { success: false, error: error.message }
     }
   })
