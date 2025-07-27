@@ -76,7 +76,7 @@ function createWindow() {
       webSecurity: true,
     },
     show: false, // Don't show until ready
-    icon: path.join(__dirname, '../build/icon.png'),
+    icon: path.join(__dirname, '../public/icon.png'),
     resizable: false, // Disable resizing to maintain fixed size
     skipTaskbar: true, // Don't show in taskbar/dock
     frame: false, // Remove all window controls including close/expand buttons
@@ -587,35 +587,44 @@ function createTray() {
   // Create tray icon with fallback
   let iconPath
   try {
-    // Try to use the PNG icon first
-    iconPath = path.join(__dirname, '../build/icon.png')
-    if (!require('fs').existsSync(iconPath)) {
-      // Fallback to SVG icon
-      iconPath = path.join(__dirname, '../build/icon.svg')
-      if (!require('fs').existsSync(iconPath)) {
-        // Use a default icon or create a simple one
-        iconPath = path.join(__dirname, '../public/favicon.svg')
-      }
+    // In production, try different paths based on app structure
+    const possiblePaths = [
+      path.join(__dirname, '../public/icon.png'), // Development
+      path.join(process.resourcesPath, 'app.asar.unpacked/public/icon.png'), // Production (asar unpacked)
+      path.join(process.resourcesPath, 'public/icon.png'), // Production (no asar)
+      path.join(__dirname, '../../public/icon.png'), // Alternative structure
+      path.join(__dirname, '../public/icon.svg'), // SVG fallback
+      path.join(__dirname, '../public/favicon.svg'), // Final fallback
+    ]
+
+    iconPath = possiblePaths.find((p) => require('fs').existsSync(p))
+
+    if (!iconPath) {
+      console.warn('No icon found, using default system icon')
+      iconPath = null
+    } else {
+      console.log('Using tray icon:', iconPath)
     }
-    console.log('Using tray icon:', iconPath)
   } catch (error) {
-    console.warn('Icon path resolution failed, using default:', error.message)
-    iconPath = path.join(__dirname, '../public/favicon.svg')
+    console.warn('Icon path resolution failed:', error.message)
+    iconPath = null
   }
 
   try {
-    tray = new Tray(iconPath)
-    console.log('Tray created successfully with icon')
-  } catch (error) {
-    console.error('Failed to create tray with icon:', error.message)
-    // Create tray without icon (will use default system icon)
-    try {
-      tray = new Tray('')
-      console.log('Tray created successfully without icon')
-    } catch (fallbackError) {
-      console.error('Failed to create tray even without icon:', fallbackError.message)
-      return // Don't create tray if it fails completely
+    if (iconPath) {
+      tray = new Tray(iconPath)
+      console.log('Tray created successfully with icon')
+    } else {
+      // Use a minimal template icon when no file is found
+      const { nativeImage } = require('electron')
+      const templateIcon = nativeImage.createEmpty()
+      templateIcon.setTemplateImage(true)
+      tray = new Tray(templateIcon)
+      console.log('Tray created successfully with template icon')
     }
+  } catch (error) {
+    console.error('Failed to create tray:', error.message)
+    return // Don't create tray if it fails completely
   }
 
   // Create context menu
@@ -641,8 +650,17 @@ function createTray() {
     { type: 'separator' },
     {
       label: 'Quit',
-      click: () => {
-        app.quit()
+      click: async () => {
+        try {
+          // Shutdown AI services first
+          await whisperCppService.shutdown()
+          await llamaCppService.shutdown()
+        } catch (error) {
+          console.error('Error shutting down services:', error)
+        }
+        
+        // Force quit the app
+        app.exit(0)
       },
     },
   ])
@@ -664,9 +682,43 @@ function createTray() {
   console.log('Tray created successfully')
 }
 
+// Request system permissions
+async function requestPermissions() {
+  if (process.platform === 'darwin') {
+    const { systemPreferences } = require('electron')
+    
+    try {
+      // Request microphone permission
+      const micStatus = systemPreferences.getMediaAccessStatus('microphone')
+      console.log('Microphone permission status:', micStatus)
+      
+      if (micStatus !== 'granted') {
+        console.log('Requesting microphone permission...')
+        const granted = await systemPreferences.askForMediaAccess('microphone')
+        console.log('Microphone permission granted:', granted)
+      }
+      
+      // Check accessibility permission (for Apple Events/keystrokes)
+      const accessibilityGranted = systemPreferences.isTrustedAccessibilityClient(false)
+      console.log('Accessibility permission status:', accessibilityGranted)
+      
+      if (!accessibilityGranted) {
+        console.log('Accessibility permission needed. Opening System Preferences...')
+        // This will prompt user to grant accessibility permission
+        systemPreferences.isTrustedAccessibilityClient(true)
+      }
+    } catch (error) {
+      console.error('Error requesting permissions:', error)
+    }
+  }
+}
+
 // App event handlers
 app.whenReady().then(async () => {
   try {
+    // Request permissions early
+    await requestPermissions()
+    
     // Initialize AI services
     console.log('Initializing AI services...')
 

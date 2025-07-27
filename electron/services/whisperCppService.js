@@ -54,11 +54,19 @@ class WhisperCppService extends EventEmitter {
    */
   async findWhisperBinary() {
     const possiblePaths = [
+      // Development paths
       path.join(__dirname, '../../whisper.cpp/build/bin/whisper-cli'),
       path.join(__dirname, '../../whisper.cpp/build/bin/main'),
       path.join(__dirname, '../../whisper.cpp/main'),
+      // Production paths (app bundle)
+      path.join(process.resourcesPath, 'whisper.cpp/build/bin/whisper-cli'),
+      path.join(process.resourcesPath, 'whisper.cpp/build/bin/main'),
+      path.join(process.resourcesPath, 'app.asar.unpacked/whisper.cpp/build/bin/whisper-cli'),
+      path.join(process.resourcesPath, 'app.asar.unpacked/whisper.cpp/build/bin/main'),
+      // System-installed paths
       '/usr/local/bin/whisper-cli',
       '/opt/homebrew/bin/whisper-cli',
+      'whisper-cli', // PATH lookup
     ]
 
     for (const binaryPath of possiblePaths) {
@@ -79,18 +87,33 @@ class WhisperCppService extends EventEmitter {
    * Setup model file
    */
   async setupModel() {
-    const modelDir = path.join(__dirname, '../../whisper.cpp/models')
     const possibleModels = ['ggml-base.en.bin', 'ggml-base.bin', 'ggml-small.en.bin', 'ggml-tiny.en.bin']
 
-    for (const modelName of possibleModels) {
-      const modelPath = path.join(modelDir, modelName)
-      try {
-        await fs.access(modelPath, fs.constants.F_OK)
-        this.modelPath = modelPath
-        console.log(`Found model: ${modelName}`)
-        return
-      } catch (error) {
-        // Continue to next model
+    // Try different model directory locations
+    const modelDirs = [
+      // Development paths
+      path.join(__dirname, '../../whisper.cpp/models'),
+      // Production paths (app bundle)
+      path.join(process.resourcesPath, 'whisper.cpp/models'),
+      path.join(process.resourcesPath, 'app.asar.unpacked/whisper.cpp/models'),
+      // User data directory
+      path.join(require('electron').app.getPath('userData'), 'models'),
+      // System paths
+      '/opt/homebrew/share/whisper.cpp/models',
+      '/usr/local/share/whisper.cpp/models',
+    ]
+
+    for (const modelDir of modelDirs) {
+      for (const modelName of possibleModels) {
+        const modelPath = path.join(modelDir, modelName)
+        try {
+          await fs.access(modelPath, fs.constants.F_OK)
+          this.modelPath = modelPath
+          console.log(`Found model: ${modelName} at ${modelPath}`)
+          return
+        } catch (error) {
+          // Continue to next model/directory
+        }
       }
     }
 

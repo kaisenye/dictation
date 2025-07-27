@@ -11,7 +11,7 @@
     "build:electron": "electron-builder",
     "electron": "wait-on tcp:5173 && cross-env IS_DEV=true electron .",
     "electron:pack": "electron-builder --dir",
-    "electron:dist": "electron-builder",
+    "electron:dist": "vite build && electron-builder",
     "electron:dev": "concurrently \"npm run dev\" \"npm run electron\"",
     "preview": "vite preview",
     "setup:whisper": "bash scripts/setup-whisper-cpp.sh",
@@ -66,7 +66,21 @@
     },
     "files": [
       "dist/**/*",
-      "dist-electron/**/*"
+      "dist-electron/**/*",
+      "public/icon.png",
+      "public/icon.svg"
+    ],
+    "extraResources": [
+      {
+        "from": "whisper.cpp/build/bin/",
+        "to": "whisper.cpp/build/bin/",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "whisper.cpp/models/",
+        "to": "whisper.cpp/models/",
+        "filter": ["*.bin"]
+      }
     ],
     "mac": {
       "icon": "build/icon.icns",
@@ -78,13 +92,19 @@
             "arm64"
           ]
         }
-      ]
+      ],
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Romo needs microphone access to record audio for transcription.",
+        "NSAppleEventsUsageDescription": "Romo needs to send keystrokes to paste transcribed text into other applications."
+      }
     },
     "win": {
-      "icon": "build/icon.ico"
+      "icon": "public/icon.ico"
     },
     "linux": {
-      "icon": "build/icon.png"
+      "icon": "public/icon.png"
     }
   }
 }

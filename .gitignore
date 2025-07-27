@@ -115,8 +115,8 @@ Thumbs.db
 
 # Electron specific
 out/
-build/ 
 dist-electron/
+release
 
 # Whisper.cpp
 whisper.cpp/
