@@ -74,12 +74,16 @@
       {
         "from": "whisper.cpp/build/bin/",
         "to": "whisper.cpp/build/bin/",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "whisper.cpp/models/",
         "to": "whisper.cpp/models/",
-        "filter": ["*.bin"]
+        "filter": [
+          "*.bin"
+        ]
       }
     ],
     "mac": {

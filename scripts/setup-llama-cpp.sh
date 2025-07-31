@@ -181,9 +181,9 @@ if [ -f "llama.cpp/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf" ]; then
     sleep 5
     
     # Test inference
-    curl -s -X POST http://localhost:8080/completion \
+    curl -s -X POST http://localhost:8080/v1/chat/completions \
         -H "Content-Type: application/json" \
-        -d '{"prompt": "Hello, how are you?", "n_predict": 50, "temperature": 0.7}' \
+        -d '{"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "Hello, how are you?"}], "max_tokens": 50, "temperature": 0.7}' \
         > /tmp/llama_test.txt 2>&1
     
     # Kill server

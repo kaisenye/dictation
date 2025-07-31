@@ -91,9 +91,10 @@ class LlamaCppService extends EventEmitter {
   async setupModel() {
     const modelDir = path.join(__dirname, '../../llama.cpp/models')
     const possibleModels = [
-      'mistral-7b-instruct-v0.2.Q4_K_M.gguf', // Preferred: Better for grammar correction
-      'mistral-7b-instruct-v0.1.Q4_K_M.gguf',
-      'tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf', // Fallback: Fast but may hallucinate
+      'phi-2.Q4_K_M.gguf', // Preferred: Better for text tasks, less conversational
+      'tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf', // Fast alternative
+      'mistral-7b-instruct-v0.2.Q4_K_M.gguf', // Fallback: More conversational
+      'llama-2-7b-chat.Q4_K_M.gguf', // Fallback: Similar to Mistral
     ]
 
     for (const modelName of possibleModels) {
@@ -219,10 +220,11 @@ class LlamaCppService extends EventEmitter {
     console.log('Testing Llama.cpp setup...')
 
     try {
-      // Wait a bit more for the server to fully initialize
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      // Wait much longer for the model to fully load and warm up
+      console.log('Waiting for model to fully initialize...')
+      await new Promise((resolve) => setTimeout(resolve, 10000)) // Increased to 10 seconds
 
-      const testPrompt = "Hello, this is a test. Please respond with 'Test successful'."
+      const testPrompt = 'hello this is a test'
       const response = await this.generateResponse(testPrompt)
 
       console.log('Llama.cpp test response:', response)
@@ -262,24 +264,31 @@ class LlamaCppService extends EventEmitter {
   /**
    * Build prompt for transcript refinement
    */
-  buildTranscriptRefinementPrompt(transcript) {
-    // For Mistral models, use the proper chat template format
-    return `<s>[INST] Fix only grammar and punctuation errors in this text. Do not change the meaning or add new content. Return only the corrected text:
-
-"${transcript}" [/INST]`
+  buildTranscriptRefinementMessages(transcript) {
+    return [
+      {
+        role: 'system',
+        content:
+          'Make the dictated transcript more accurate and complete. Do not change the content of the transcript. Only return the refined transcript.',
+      },
+      {
+        role: 'user',
+        content: `Here's the transcript: "${transcript}"`,
+      },
+    ]
   }
 
   /**
    * Make HTTP request using native Node.js http module
    */
-  async makeHttpRequest(payload) {
+  async makeHttpRequest(path, payload) {
     return new Promise((resolve, reject) => {
       const postData = JSON.stringify(payload)
 
       const options = {
         hostname: '127.0.0.1',
         port: this.serverPort,
-        path: '/completion',
+        path: path,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -301,6 +310,7 @@ class LlamaCppService extends EventEmitter {
             ok: res.statusCode >= 200 && res.statusCode < 300,
             headers: new Map(Object.entries(res.headers)),
             text: async () => responseData,
+            json: async () => JSON.parse(responseData),
           })
         })
       })
@@ -317,7 +327,7 @@ class LlamaCppService extends EventEmitter {
   /**
    * Make request to Llama.cpp server
    */
-  async makeServerRequest(prompt) {
+  async makeServerRequest(transcript) {
     const maxRetries = 3
     let lastError
 
@@ -325,22 +335,22 @@ class LlamaCppService extends EventEmitter {
       try {
         console.log('\n=== LLAMA.CPP REQUEST ===')
         console.log(`Attempt: ${attempt}/${maxRetries}`)
-        console.log(`Prompt: "${prompt.substring(0, 100) + (prompt.length > 100 ? '...' : '')}"`)
-        console.log('Request URL:', `http://127.0.0.1:${this.serverPort}/completion`)
+        console.log(`Transcript: "${transcript.substring(0, 100) + (transcript.length > 100 ? '...' : '')}"`)
+        console.log('Request URL:', `http://127.0.0.1:${this.serverPort}/v1/chat/completions`)
 
+        const messages = this.buildTranscriptRefinementMessages(transcript)
         const requestPayload = {
-          prompt: prompt,
-          n_predict: 20, // Reduced token count for faster response
-          temperature: 0.01, // Extremely low temperature for deterministic output
-          top_p: 0.1, // Very focused sampling
-          repeat_penalty: 1.5, // Higher penalty to prevent repetition
-          stop: ['</s>', '[INST]', '[/INST]', '<s>', '\n\n'],
-          stream: false, // Ensure non-streaming response
+          model: 'gpt-3.5-turbo', // Model name is required but can be anything
+          messages: messages,
+          max_tokens: 500, // Reduced to prevent long responses
+          temperature: 0.1, // Very low temperature for deterministic output
+          top_p: 0.5, // More focused sampling
+          stream: false,
         }
 
         // Use native Node.js HTTP instead of fetch
         console.log('Making HTTP request...')
-        const response = await this.makeHttpRequest(requestPayload)
+        const response = await this.makeHttpRequest('/v1/chat/completions', requestPayload)
         console.log('HTTP request completed')
 
         if (response.status === 503) {
@@ -359,72 +369,39 @@ class LlamaCppService extends EventEmitter {
           throw new Error(`Server request failed: ${response.status} ${response.statusText}`)
         }
 
-        // Try to get the response text first
-        const responseText = await response.text()
+        // Parse JSON response
+        const data = await response.json()
         console.log('\n=== LLAMA.CPP RESPONSE ===')
         console.log('Status:', response.status, response.statusText)
-        console.log('Raw Response Text:', responseText)
+        console.log('Parsed JSON Data:')
+        console.log(JSON.stringify(data, null, 2))
 
-        // Try to parse as JSON
-        let data
-        try {
-          data = JSON.parse(responseText)
-          console.log('Parsed JSON Data:')
-          console.log(JSON.stringify(data, null, 2))
-          console.log('DEBUG - Available keys in response:', Object.keys(data))
-          console.log('DEBUG - Data type:', typeof data)
-        } catch (parseError) {
-          console.log('Failed to parse as JSON:', parseError.message)
-          console.log('Treating as plain text response')
-          data = { content: responseText }
-        }
-
-        // LLaMA.cpp server response can have different structures
+        // Extract content from OpenAI-compatible response format
         let content = ''
-        console.log('DEBUG - Attempting to extract content from response...')
-
-        if (data.content) {
-          console.log('DEBUG - Found content field')
-          content = data.content
-        } else if (data.choices && data.choices[0] && data.choices[0].text) {
-          console.log('DEBUG - Found choices[0].text field')
-          content = data.choices[0].text
-        } else if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
-          console.log('DEBUG - Found choices[0].message.content field')
+        if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
           content = data.choices[0].message.content
-        } else if (data.text) {
-          console.log('DEBUG - Found text field')
-          content = data.text
-        } else if (data.result) {
-          console.log('DEBUG - Found result field')
-          content = data.result
-        } else if (data.output) {
-          console.log('DEBUG - Found output field')
-          content = data.output
-        } else if (data.response) {
-          console.log('DEBUG - Found response field')
-          content = data.response
-        } else if (data.generation) {
-          console.log('DEBUG - Found generation field')
-          content = data.generation
-        } else if (data.completion) {
-          console.log('DEBUG - Found completion field')
-          content = data.completion
-        } else if (typeof data === 'string') {
-          console.log('DEBUG - Data is string')
-          content = data
+          console.log('DEBUG - Found choices[0].message.content field')
+        } else if (data.choices && data.choices[0] && data.choices[0].text) {
+          content = data.choices[0].text
+          console.log('DEBUG - Found choices[0].text field')
         } else {
-          console.error('Unknown LLaMA.cpp response structure:', data)
+          console.error('Unexpected response structure:', data)
           console.error('Available fields:', Object.keys(data))
-          console.error('Data sample:', JSON.stringify(data).substring(0, 200))
-          content = 'No response generated'
+          throw new Error('Could not extract content from response')
         }
+
+        content =
+          content
+            .match(/"([^"]*)"/)
+            ?.pop()
+            ?.trim() || content.trim()
 
         console.log('\n=== LLAMA.CPP RESULT ===')
         console.log(`Success on attempt ${attempt}`)
         console.log(`Extracted content: "${content}"`)
         console.log('========================\n')
-        return content.trim()
+
+        return content
       } catch (error) {
         lastError = error
         console.error(`Llama.cpp request failed (attempt ${attempt}):`, error.message)
@@ -447,8 +424,7 @@ class LlamaCppService extends EventEmitter {
     }
 
     try {
-      const prompt = this.buildTranscriptRefinementPrompt(transcript)
-      const response = await this.makeServerRequest(prompt)
+      const response = await this.makeServerRequest(transcript)
       return response.trim()
     } catch (error) {
       console.error('Error refining transcript:', error)
@@ -463,12 +439,35 @@ class LlamaCppService extends EventEmitter {
     console.log('Shutting down Llama.cpp service...')
 
     if (this.serverProcess) {
-      this.serverProcess.kill('SIGTERM')
+      try {
+        // First try graceful shutdown
+        console.log('Sending SIGTERM to llama-server...')
+        this.serverProcess.kill('SIGTERM')
+
+        // Wait up to 5 seconds for graceful shutdown
+        await new Promise((resolve) => {
+          const timeout = setTimeout(() => {
+            console.log('SIGTERM timeout, force killing llama-server...')
+            if (this.serverProcess) {
+              this.serverProcess.kill('SIGKILL')
+            }
+            resolve()
+          }, 5000)
+
+          this.serverProcess.on('exit', () => {
+            clearTimeout(timeout)
+            console.log('Llama-server process exited')
+            resolve()
+          })
+        })
+      } catch (error) {
+        console.error('Error during llama-server shutdown:', error)
+      }
+
       this.serverProcess = null
     }
 
     this.isInitialized = false
-
     console.log('Llama.cpp service shutdown complete')
   }
 }

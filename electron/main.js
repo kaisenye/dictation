@@ -2,7 +2,7 @@ const { app, BrowserWindow, Menu, shell, ipcMain, Notification, globalShortcut, 
 const path = require('path')
 const fs = require('fs').promises
 const whisperCppService = require('./services/whisperCppService')
-// const llamaCppService = require('./services/llamaCppService') // Disabled
+const llamaCppService = require('./services/llamaCppService')
 const isDev = process.env.IS_DEV === 'true'
 
 let mainWindow
@@ -136,7 +136,7 @@ function createWindow() {
     // Shutdown AI services
     try {
       await whisperCppService.shutdown()
-      // await llamaCppService.shutdown() // Disabled
+      await llamaCppService.shutdown()
     } catch (error) {
       console.error('Error shutting down AI services:', error)
     }
@@ -414,22 +414,22 @@ function setupIpcHandlers() {
     }
   })
 
-  // LLM Service - Disabled for now
-  // ipcMain.handle('llama-refine-transcript', async (event, transcript) => {
-  //   console.log('\n🔄 LLAMA REFINEMENT REQUEST')
-  //   console.log('Original transcript:', `"${transcript}"`)
-  //   try {
-  //     const refinedTranscript = await llamaCppService.refineTranscript(transcript)
-  //     console.log('✅ LLAMA REFINEMENT SUCCESS')
-  //     console.log('Refined transcript:', `"${refinedTranscript}"`)
-  //     console.log('================================\n')
-  //     return { success: true, refinedTranscript }
-  //   } catch (error) {
-  //     console.error('❌ LLAMA REFINEMENT FAILED:', error.message)
-  //     console.log('================================\n')
-  //     return { success: false, error: error.message }
-  //   }
-  // })
+  // LLM Service - Now enabled with improved /v1/chat/completions endpoint
+  ipcMain.handle('llama-refine-transcript', async (event, transcript) => {
+    console.log('\n🔄 LLAMA REFINEMENT REQUEST')
+    console.log('Original transcript:', `"${transcript}"`)
+    try {
+      const refinedTranscript = await llamaCppService.refineTranscript(transcript)
+      console.log('✅ LLAMA REFINEMENT SUCCESS')
+      console.log('Refined transcript:', `"${refinedTranscript}"`)
+      console.log('================================\n')
+      return { success: true, refinedTranscript }
+    } catch (error) {
+      console.error('❌ LLAMA REFINEMENT FAILED:', error.message)
+      console.log('================================\n')
+      return { success: false, error: error.message }
+    }
+  })
 }
 
 // Create application menu for macOS
@@ -660,7 +660,7 @@ function createTray() {
         try {
           // Shutdown AI services first
           await whisperCppService.shutdown()
-          // await llamaCppService.shutdown() // Disabled
+          await llamaCppService.shutdown()
         } catch (error) {
           console.error('Error shutting down services:', error)
         }
@@ -737,14 +737,14 @@ app.whenReady().then(async () => {
       // Don't fail the app startup for Whisper.cpp - it can be retried later
     }
 
-    // Initialize Llama.cpp (disabled for now)
-    // try {
-    //   await llamaCppService.initialize()
-    //   console.log('Llama.cpp service initialized successfully')
-    // } catch (llamaError) {
-    //   console.warn('Llama.cpp service initialization failed, will retry on demand:', llamaError.message)
-    //   // Don't fail the app startup for Llama.cpp - it's optional for post-processing
-    // }
+    // Initialize Llama.cpp (now enabled)
+    try {
+      await llamaCppService.initialize()
+      console.log('Llama.cpp service initialized successfully')
+    } catch (llamaError) {
+      console.warn('Llama.cpp service initialization failed, will retry on demand:', llamaError.message)
+      // Don't fail the app startup for Llama.cpp - it's optional for post-processing
+    }
 
     // Create window and set up handlers (these are required)
     createWindow()
@@ -786,10 +786,36 @@ app.whenReady().then(async () => {
 })
 
 // Quit when all windows are closed (except on macOS)
-app.on('window-all-closed', () => {
+app.on('window-all-closed', async () => {
   if (process.platform !== 'darwin') {
+    // Ensure AI services are shut down before quitting
+    try {
+      await whisperCppService.shutdown()
+      await llamaCppService.shutdown()
+    } catch (error) {
+      console.error('Error shutting down AI services on quit:', error)
+    }
     app.quit()
   }
+})
+
+// Handle app quit to ensure AI services are shut down
+app.on('before-quit', async (event) => {
+  console.log('App is quitting, shutting down AI services...')
+  
+  // Prevent immediate quit to allow cleanup
+  event.preventDefault()
+  
+  try {
+    await whisperCppService.shutdown()
+    await llamaCppService.shutdown()
+    console.log('AI services shut down successfully')
+  } catch (error) {
+    console.error('Error shutting down AI services:', error)
+  }
+  
+  // Now actually quit
+  app.exit(0)
 })
 
 // Security: Prevent new window creation

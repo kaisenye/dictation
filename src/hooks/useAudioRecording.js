@@ -1,5 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 
+// LLaMA.cpp refinement now uses improved /v1/chat/completions endpoint
+// with Mistral-7B-Instruct model and better prompting for grammar correction
+const ENABLE_LLAMA_REFINEMENT = false
+
 const useAudioRecording = () => {
   console.log('=== useAudioRecording hook initialized ===')
 
@@ -307,15 +311,6 @@ const useAudioRecording = () => {
         if (result && result.success && result.result && result.result.text) {
           finalText = result.result.text.trim()
           console.log('Raw transcription:', finalText)
-
-          // TODO: LLaMA.cpp refinement temporarily disabled due to hallucination issues
-          // Current model (TinyLlama-1.1B-Chat) is a chat model that generates conversation
-          // instead of simple grammar correction. Need to:
-          // 1. Download a base model (non-chat) like llama-2-7b.Q4_K_M.gguf, OR
-          // 2. Use a grammar-specific model, OR
-          // 3. Improve prompt engineering for chat models
-          // Re-enable by changing ENABLE_LLAMA_REFINEMENT to true
-          const ENABLE_LLAMA_REFINEMENT = false
 
           // AI refinement with Llama if available
           if (
