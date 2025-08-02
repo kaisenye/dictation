@@ -133,5 +133,6 @@ llama.cpp/
 *.bin.gz
 *.bin.gz.part
 
-# Cursor
+# AI related
 cursor/
+docs/

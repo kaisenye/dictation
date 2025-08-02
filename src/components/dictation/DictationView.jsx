@@ -7,7 +7,8 @@ import '../../styles/animations.css'
 const DictationView = () => {
   console.log('=== DictationView component rendered ===')
 
-  const { error } = useDictationStore()
+  const { error, isAgentMode, toggleAgentMode } = useDictationStore()
+  console.log('🔍 Current isAgentMode state in component:', isAgentMode)
   const [isExpanded, setIsExpanded] = useState(false)
   const [showProcessingWave, setShowProcessingWave] = useState(false)
 
@@ -39,6 +40,11 @@ const DictationView = () => {
   useEffect(() => {
     recordingStateRef.current = isRecording
   }, [isRecording])
+
+  // Monitor agent mode state changes
+  useEffect(() => {
+    console.log('🔄 Agent mode state changed to:', isAgentMode)
+  }, [isAgentMode])
 
   // Press and hold behavior handlers
   const handleStartRecording = useCallback(async () => {
@@ -102,6 +108,27 @@ const DictationView = () => {
     checkServices()
   }, [])
 
+  // Handle agent mode toggle with debouncing
+  const handleToggleAgentMode = useCallback(() => {
+    console.log('=== Toggling agent mode ===')
+    console.log('Current agent mode state:', isAgentMode)
+
+    // Add debouncing to prevent multiple rapid toggles
+    if (isHandlingToggleRef.current) {
+      console.log('⚠️ Toggle already in progress, skipping')
+      return
+    }
+
+    isHandlingToggleRef.current = true
+    toggleAgentMode()
+    console.log('Agent mode toggled, new state will be:', !isAgentMode)
+
+    // Reset the debounce flag after a short delay
+    setTimeout(() => {
+      isHandlingToggleRef.current = false
+    }, 500)
+  }, [toggleAgentMode, isAgentMode])
+
   // Set up global shortcuts once on mount
   useEffect(() => {
     console.log('=== Setting up event listeners ===')
@@ -134,6 +161,17 @@ const DictationView = () => {
       })
     }
 
+    // Set up agent mode toggle listener
+    if (window.electronAPI.onGlobalShortcutToggleAgentMode) {
+      console.log('🎯 Setting up agent mode toggle listener')
+      window.electronAPI.onGlobalShortcutToggleAgentMode(() => {
+        console.log('🚀 === Received global-shortcut-toggle-agent-mode event in React ===')
+        handleToggleAgentMode()
+      })
+    } else {
+      console.warn('⚠️ onGlobalShortcutToggleAgentMode not available in electronAPI')
+    }
+
     console.log('Event listeners set up successfully')
 
     // Cleanup function
@@ -141,7 +179,7 @@ const DictationView = () => {
       // Note: In a real implementation, you might want to remove listeners
       // but the current electronAPI doesn't expose removeListener methods
     }
-  }, [handleStartRecording, handleStopRecording]) // Include the callbacks as dependencies
+  }, [handleStartRecording, handleStopRecording, handleToggleAgentMode]) // Include the callbacks as dependencies
 
   // Update store with recording state
   useEffect(() => {
@@ -156,7 +194,11 @@ const DictationView = () => {
   }, [recordingError])
 
   return (
-    <div className="w-full h-full flex items-center justify-center bg-black rounded-full">
+    <div
+      className={`w-full h-full flex items-center justify-center bg-black rounded-full ${
+        isAgentMode ? 'agent-mode-border agent-mode-glow' : ''
+      }`}
+    >
       {/* Draggable area - disabled in pill mode */}
       {isExpanded && <div className="absolute inset-0 cursor-move" style={{ WebkitAppRegion: 'drag' }} />}
 
@@ -165,21 +207,19 @@ const DictationView = () => {
         {isExpanded ? (
           // Expanded view with sound wave
           <div className="flex items-center justify-center rounded-full">
-            <SoundWaveVisualizer audioLevel={audioLevel} isRecording={isRecording} />
+            <SoundWaveVisualizer audioLevel={audioLevel} isRecording={isRecording} isAgentMode={isAgentMode} />
 
             {/* Processing indicator */}
             {isProcessing && (
               <div className="absolute bottom-1 left-1 flex items-center space-x-1">
-                <div className="w-0.5 h-0.5 bg-blue-400 rounded-full animate-pulse" />
                 <div
-                  className="w-0.5 h-0.5 bg-blue-400 rounded-full animate-pulse"
+                  className={`w-0.5 h-0.5 ${isAgentMode ? 'bg-green-400' : 'bg-blue-400'} rounded-full animate-pulse`}
                   style={{ animationDelay: '0.2s' }}
                 />
                 <div
-                  className="w-0.5 h-0.5 bg-blue-400 rounded-full animate-pulse"
+                  className={`w-0.5 h-0.5 ${isAgentMode ? 'bg-green-400' : 'bg-blue-400'} rounded-full animate-pulse`}
                   style={{ animationDelay: '0.4s' }}
                 />
-                <span className="text-blue-400 text-xs ml-1">Processing...</span>
               </div>
             )}
           </div>
@@ -189,12 +229,30 @@ const DictationView = () => {
             {showProcessingWave ? (
               // Processing state - waving loader animation
               <div className="flex items-center space-x-0.5">
-                <div className="w-0.5 h-1 bg-blue-400 rounded-full wave-bar" style={{ animationDelay: '0ms' }} />
-                <div className="w-0.5 h-1 bg-blue-400 rounded-full wave-bar" style={{ animationDelay: '100ms' }} />
-                <div className="w-0.5 h-1 bg-blue-400 rounded-full wave-bar" style={{ animationDelay: '200ms' }} />
-                <div className="w-0.5 h-1 bg-blue-400 rounded-full wave-bar" style={{ animationDelay: '300ms' }} />
-                <div className="w-0.5 h-1 bg-blue-400 rounded-full wave-bar" style={{ animationDelay: '400ms' }} />
-                <div className="w-0.5 h-1 bg-blue-400 rounded-full wave-bar" style={{ animationDelay: '500ms' }} />
+                <div
+                  className={`w-0.5 h-1 ${isAgentMode ? 'bg-green-400' : 'bg-blue-400'} rounded-full wave-bar`}
+                  style={{ animationDelay: '0ms' }}
+                />
+                <div
+                  className={`w-0.5 h-1 ${isAgentMode ? 'bg-green-400' : 'bg-blue-400'} rounded-full wave-bar`}
+                  style={{ animationDelay: '100ms' }}
+                />
+                <div
+                  className={`w-0.5 h-1 ${isAgentMode ? 'bg-green-400' : 'bg-blue-400'} rounded-full wave-bar`}
+                  style={{ animationDelay: '200ms' }}
+                />
+                <div
+                  className={`w-0.5 h-1 ${isAgentMode ? 'bg-green-400' : 'bg-blue-400'} rounded-full wave-bar`}
+                  style={{ animationDelay: '300ms' }}
+                />
+                <div
+                  className={`w-0.5 h-1 ${isAgentMode ? 'bg-green-400' : 'bg-blue-400'} rounded-full wave-bar`}
+                  style={{ animationDelay: '400ms' }}
+                />
+                <div
+                  className={`w-0.5 h-1 ${isAgentMode ? 'bg-green-400' : 'bg-blue-400'} rounded-full wave-bar`}
+                  style={{ animationDelay: '500ms' }}
+                />
               </div>
             ) : (
               // Default state - simple circle
