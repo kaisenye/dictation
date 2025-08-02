@@ -112,7 +112,8 @@ function createWindow() {
   // Load the app
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173')
-    // Removed auto-opening of dev tools
+    // Open dev tools for debugging
+    mainWindow.webContents.openDevTools()
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
@@ -430,6 +431,23 @@ function setupIpcHandlers() {
       return { success: false, error: error.message }
     }
   })
+
+  // Agent Mode handlers (using LlamaCpp service)
+  ipcMain.handle('agent-process-request', async (event, transcript) => {
+    console.log('\n🤖 AGENT MODE REQUEST')
+    console.log('Original transcript:', `"${transcript}"`)
+    try {
+      const result = await llamaCppService.processAgentRequest(transcript)
+      console.log('✅ AGENT MODE SUCCESS')
+      console.log('Result:', result)
+      console.log('================================\n')
+      return result
+    } catch (error) {
+      console.error('❌ AGENT MODE FAILED:', error.message)
+      console.log('================================\n')
+      return { success: false, error: error.message, fallbackContent: transcript }
+    }
+  })
 }
 
 // Create application menu for macOS
@@ -584,6 +602,22 @@ function registerGlobalShortcuts() {
 
   if (!showHideSuccess) {
     console.log('Failed to register CmdOrCtrl+Shift+H shortcut')
+  }
+
+  // Toggle agent mode
+  const agentModeSuccess = globalShortcut.register('CmdOrCtrl+Shift+S', () => {
+    console.log('🚀 Global shortcut CmdOrCtrl+Shift+S pressed - Toggle Agent Mode')
+    if (mainWindow) {
+      console.log('📡 Sending global-shortcut-toggle-agent-mode event to renderer')
+      mainWindow.webContents.send('global-shortcut-toggle-agent-mode')
+      console.log('✅ Event sent successfully')
+    } else {
+      console.log('❌ mainWindow is null, cannot send event')
+    }
+  })
+
+  if (!agentModeSuccess) {
+    console.log('Failed to register CmdOrCtrl+Shift+S shortcut')
   }
 
   console.log('Global shortcuts registered successfully')
@@ -745,6 +779,7 @@ app.whenReady().then(async () => {
       console.warn('Llama.cpp service initialization failed, will retry on demand:', llamaError.message)
       // Don't fail the app startup for Llama.cpp - it's optional for post-processing
     }
+
 
     // Create window and set up handlers (these are required)
     createWindow()

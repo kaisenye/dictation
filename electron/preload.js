@@ -20,6 +20,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // LLM Service operations
   llamaRefineTranscript: (transcript) => ipcRenderer.invoke('llama-refine-transcript', transcript),
 
+  // Agent Mode operations (using LlamaCpp service)
+  agentProcessRequest: (transcript) => ipcRenderer.invoke('agent-process-request', transcript),
+
   // Audio processing methods for React components (aliases for convenience)
   processAudioChunk: (audioBuffer, sampleRate = 16000) =>
     ipcRenderer.invoke('ai-process-chunk', audioBuffer, sampleRate),
@@ -39,6 +42,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onGlobalShortcutStartRecording: (callback) => ipcRenderer.on('global-shortcut-start-recording', callback),
   onGlobalShortcutStopRecording: (callback) => ipcRenderer.on('global-shortcut-stop-recording', callback),
   onGlobalShortcutToggleDictation: (callback) => ipcRenderer.on('global-shortcut-toggle-dictation', callback),
+  onGlobalShortcutToggleAgentMode: (callback) => ipcRenderer.on('global-shortcut-toggle-agent-mode', callback),
   onGlobalShortcutCopyTranscription: (callback) => ipcRenderer.on('global-shortcut-copy-transcription', callback),
   onTrayStartDictation: (callback) => ipcRenderer.on('tray-start-dictation', callback),
   onTrayOpenSettings: (callback) => ipcRenderer.on('tray-open-settings', callback),

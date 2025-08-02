@@ -433,6 +433,110 @@ class LlamaCppService extends EventEmitter {
   }
 
   /**
+   * Process agent request - convert voice request to formatted content
+   */
+  async processAgentRequest(transcript) {
+    if (!transcript || transcript.trim().length === 0) {
+      throw new Error('No transcript provided for agent processing')
+    }
+
+    try {
+      console.log('\n🤖 AGENT MODE PROCESSING')
+      console.log('Original transcript:', `"${transcript}"`)
+
+      // Detect content type and build appropriate prompt
+      const contentType = this.detectContentType(transcript)
+      console.log('Detected content type:', contentType)
+
+      const agentPrompt = this.buildAgentPrompt(transcript, contentType)
+
+      // Generate content using the existing server request method
+      const generatedContent = await this.makeServerRequest(agentPrompt)
+
+      console.log('✅ AGENT PROCESSING SUCCESS')
+      console.log(
+        `Generated content: "${generatedContent.substring(0, 200) + (generatedContent.length > 200 ? '...' : '')}"`
+      )
+      console.log('================================\n')
+
+      return {
+        success: true,
+        contentType: contentType,
+        originalTranscript: transcript,
+        generatedContent: generatedContent.trim(),
+      }
+    } catch (error) {
+      console.error('❌ AGENT PROCESSING FAILED:', error.message)
+      console.log('================================\n')
+
+      return {
+        success: false,
+        error: error.message,
+        fallbackContent: transcript,
+        contentType: 'fallback',
+      }
+    }
+  }
+
+  /**
+   * Detect content type from user's transcript
+   */
+  detectContentType(transcript) {
+    const text = transcript.toLowerCase()
+
+    if (
+      text.includes('email') ||
+      text.includes('write to') ||
+      text.includes('send to') ||
+      text.includes('professor') ||
+      text.includes('colleague')
+    ) {
+      return 'email'
+    }
+    if (
+      text.includes('document') ||
+      text.includes('report') ||
+      text.includes('proposal') ||
+      text.includes('memo') ||
+      text.includes('letter')
+    ) {
+      return 'document'
+    }
+    if (text.includes('agenda') || text.includes('meeting') || text.includes('standup')) {
+      return 'agenda'
+    }
+    if (text.includes('list') || text.includes('todo') || text.includes('checklist') || text.includes('tasks')) {
+      return 'list'
+    }
+    if (text.includes('note') || text.includes('notes') || text.includes('summary')) {
+      return 'note'
+    }
+
+    return 'general'
+  }
+
+  /**
+   * Build agent prompt for content generation
+   */
+  buildAgentPrompt(transcript, contentType) {
+    const prompts = {
+      email: `You are a professional email assistant. Convert this spoken request into a well-formatted email with subject line, proper greeting, clear body, and appropriate closing. Make it professional but friendly.\n\nRequest: "${transcript}"\n\nEmail:`,
+
+      document: `You are a document creation assistant. Convert this request into a well-structured document with appropriate headers and formatting.\n\nRequest: "${transcript}"\n\nDocument:`,
+
+      agenda: `You are a meeting agenda assistant. Convert this request into a professional meeting agenda with clear sections and structure.\n\nRequest: "${transcript}"\n\nAgenda:`,
+
+      list: `You are a list creation assistant. Convert this request into a well-organized list with clear items and structure.\n\nRequest: "${transcript}"\n\nList:`,
+
+      note: `You are a note-taking assistant. Convert this request into clear, organized notes with bullet points as appropriate.\n\nRequest: "${transcript}"\n\nNotes:`,
+
+      general: `You are an intelligent writing assistant. Analyze this spoken request and create appropriate content that fulfills the user's intent with proper formatting.\n\nRequest: "${transcript}"\n\nContent:`,
+    }
+
+    return prompts[contentType] || prompts['general']
+  }
+
+  /**
    * Shutdown the service
    */
   async shutdown() {
