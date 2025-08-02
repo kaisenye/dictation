@@ -66,7 +66,7 @@ const SoundWaveVisualizer = ({ audioLevel = 0, isRecording = false, isAgentMode 
         if (isRecording) {
           if (isAgentMode) {
             // Green color when recording in agent mode
-            ctx.fillStyle = '#22c55e' // green-500
+            ctx.fillStyle = '#9ae600' // green-500
           } else {
             // White color when recording in normal mode
             ctx.fillStyle = '#ffffff'
@@ -75,9 +75,9 @@ const SoundWaveVisualizer = ({ audioLevel = 0, isRecording = false, isAgentMode 
           if (isAgentMode) {
             // Green gradient when idle in agent mode
             const gradient = ctx.createLinearGradient(0, centerY - barHeight / 2, 0, centerY + barHeight / 2)
-            gradient.addColorStop(0, '#86efac') // green-300
-            gradient.addColorStop(0.5, '#22c55e') // green-500
-            gradient.addColorStop(1, '#16a34a') // green-600
+            gradient.addColorStop(0, '#a3e635') // lime-400
+            gradient.addColorStop(0.5, '#84cc16') // lime-500
+            gradient.addColorStop(1, '#65a30d') // lime-600
             ctx.fillStyle = gradient
           } else {
             // Gray gradient when idle in normal mode

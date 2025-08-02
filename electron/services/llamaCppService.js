@@ -91,8 +91,8 @@ class LlamaCppService extends EventEmitter {
   async setupModel() {
     const modelDir = path.join(__dirname, '../../llama.cpp/models')
     const possibleModels = [
-      'phi-2.Q4_K_M.gguf', // Preferred: Better for text tasks, less conversational
-      'tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf', // Fast alternative
+      'tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf', // Preferred: Fast and efficient
+      'phi-2.Q4_K_M.gguf', // Alternative: Good for text tasks
       'mistral-7b-instruct-v0.2.Q4_K_M.gguf', // Fallback: More conversational
       'llama-2-7b-chat.Q4_K_M.gguf', // Fallback: Similar to Mistral
     ]

@@ -196,7 +196,7 @@ const DictationView = () => {
   return (
     <div
       className={`w-full h-full flex items-center justify-center bg-black rounded-full ${
-        isAgentMode ? 'agent-mode-border agent-mode-glow' : ''
+        isAgentMode ? 'border-2 border-lime-400' : ''
       }`}
     >
       {/* Draggable area - disabled in pill mode */}
@@ -213,11 +213,11 @@ const DictationView = () => {
             {isProcessing && (
               <div className="absolute bottom-1 left-1 flex items-center space-x-1">
                 <div
-                  className={`w-0.5 h-0.5 ${isAgentMode ? 'bg-green-400' : 'bg-blue-400'} rounded-full animate-pulse`}
+                  className={`w-0.5 h-0.5 ${isAgentMode ? 'bg-lime-400' : 'bg-blue-400'} rounded-full animate-pulse`}
                   style={{ animationDelay: '0.2s' }}
                 />
                 <div
-                  className={`w-0.5 h-0.5 ${isAgentMode ? 'bg-green-400' : 'bg-blue-400'} rounded-full animate-pulse`}
+                  className={`w-0.5 h-0.5 ${isAgentMode ? 'bg-lime-400' : 'bg-blue-400'} rounded-full animate-pulse`}
                   style={{ animationDelay: '0.4s' }}
                 />
               </div>
@@ -230,33 +230,33 @@ const DictationView = () => {
               // Processing state - waving loader animation
               <div className="flex items-center space-x-0.5">
                 <div
-                  className={`w-0.5 h-1 ${isAgentMode ? 'bg-green-400' : 'bg-blue-400'} rounded-full wave-bar`}
+                  className={`w-0.5 h-1 ${isAgentMode ? 'bg-lime-400' : 'bg-blue-400'} rounded-full wave-bar`}
                   style={{ animationDelay: '0ms' }}
                 />
                 <div
-                  className={`w-0.5 h-1 ${isAgentMode ? 'bg-green-400' : 'bg-blue-400'} rounded-full wave-bar`}
+                  className={`w-0.5 h-1 ${isAgentMode ? 'bg-lime-400' : 'bg-blue-400'} rounded-full wave-bar`}
                   style={{ animationDelay: '100ms' }}
                 />
                 <div
-                  className={`w-0.5 h-1 ${isAgentMode ? 'bg-green-400' : 'bg-blue-400'} rounded-full wave-bar`}
+                  className={`w-0.5 h-1 ${isAgentMode ? 'bg-lime-400' : 'bg-blue-400'} rounded-full wave-bar`}
                   style={{ animationDelay: '200ms' }}
                 />
                 <div
-                  className={`w-0.5 h-1 ${isAgentMode ? 'bg-green-400' : 'bg-blue-400'} rounded-full wave-bar`}
+                  className={`w-0.5 h-1 ${isAgentMode ? 'bg-lime-400' : 'bg-blue-400'} rounded-full wave-bar`}
                   style={{ animationDelay: '300ms' }}
                 />
                 <div
-                  className={`w-0.5 h-1 ${isAgentMode ? 'bg-green-400' : 'bg-blue-400'} rounded-full wave-bar`}
+                  className={`w-0.5 h-1 ${isAgentMode ? 'bg-lime-400' : 'bg-blue-400'} rounded-full wave-bar`}
                   style={{ animationDelay: '400ms' }}
                 />
                 <div
-                  className={`w-0.5 h-1 ${isAgentMode ? 'bg-green-400' : 'bg-blue-400'} rounded-full wave-bar`}
+                  className={`w-0.5 h-1 ${isAgentMode ? 'bg-lime-400' : 'bg-blue-400'} rounded-full wave-bar`}
                   style={{ animationDelay: '500ms' }}
                 />
               </div>
             ) : (
               // Default state - simple circle
-              <div className="w-3 h-3 bg-gray-700 rounded-full" />
+              <div className="w-0 h-0 bg-gray-900 rounded-full" />
             )}
           </div>
         )}
