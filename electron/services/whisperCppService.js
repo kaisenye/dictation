@@ -1,127 +1,40 @@
 const { spawn } = require('child_process')
 const path = require('path')
-const { EventEmitter } = require('events')
 const fs = require('fs').promises
-const os = require('os')
+const BaseAIService = require('./base/BaseAIService')
+const ProcessUtils = require('../utils/ProcessUtils')
+const AudioUtils = require('../utils/AudioUtils')
+const { WHISPER_STREAMING } = require('../utils/Constants')
 
-class WhisperCppService extends EventEmitter {
+class WhisperCppService extends BaseAIService {
   constructor() {
-    super()
-    this.whisperBinary = null
-    this.modelPath = null
-    this.isInitialized = false
-    this.isInitializing = false
+    super('Whisper')
+    this.whisperBinary = null // Alias for compatibility
     this.pendingRequests = new Map()
-    this.requestId = 0
     this.streamingProcess = null
-    this.tempDir = os.tmpdir()
   }
 
   /**
-   * Initialize the Whisper.cpp service
+   * Setup binary using ProcessUtils
+   * Overrides BaseAIService.setupBinary()
    */
-  async initialize() {
-    if (this.isInitialized || this.isInitializing) {
-      return this.isInitialized
-    }
-
-    this.isInitializing = true
-
-    try {
-      // Find Whisper.cpp binary
-      await this.findWhisperBinary()
-
-      // Find or download model
-      await this.setupModel()
-
-      // Test the setup
-      await this.testSetup()
-
-      this.isInitialized = true
-      this.isInitializing = false
-
-      console.log('Whisper.cpp service initialized successfully')
-      return true
-    } catch (error) {
-      this.isInitializing = false
-      console.error('Failed to initialize Whisper.cpp service:', error)
-      throw error
-    }
+  async setupBinary() {
+    this.binary = await ProcessUtils.findBinary('WHISPER', __dirname)
+    this.whisperBinary = this.binary // Keep alias for existing code compatibility
   }
 
   /**
-   * Find Whisper.cpp binary
-   */
-  async findWhisperBinary() {
-    const possiblePaths = [
-      // Development paths
-      path.join(__dirname, '../../whisper.cpp/build/bin/whisper-cli'),
-      path.join(__dirname, '../../whisper.cpp/build/bin/main'),
-      path.join(__dirname, '../../whisper.cpp/main'),
-      // Production paths (app bundle)
-      path.join(process.resourcesPath, 'whisper.cpp/build/bin/whisper-cli'),
-      path.join(process.resourcesPath, 'whisper.cpp/build/bin/main'),
-      path.join(process.resourcesPath, 'app.asar.unpacked/whisper.cpp/build/bin/whisper-cli'),
-      path.join(process.resourcesPath, 'app.asar.unpacked/whisper.cpp/build/bin/main'),
-      // System-installed paths
-      '/usr/local/bin/whisper-cli',
-      '/opt/homebrew/bin/whisper-cli',
-      'whisper-cli', // PATH lookup
-    ]
-
-    for (const binaryPath of possiblePaths) {
-      try {
-        await fs.access(binaryPath, fs.constants.F_OK | fs.constants.X_OK)
-        this.whisperBinary = binaryPath
-        console.log(`Found Whisper.cpp binary at: ${binaryPath}`)
-        return
-      } catch (error) {
-        // Continue to next path
-      }
-    }
-
-    throw new Error('Whisper.cpp binary not found. Please build whisper.cpp first.')
-  }
-
-  /**
-   * Setup model file
+   * Setup model using ProcessUtils
+   * Overrides BaseAIService.setupModel()
    */
   async setupModel() {
-    const possibleModels = ['ggml-base.en.bin', 'ggml-base.bin', 'ggml-small.en.bin', 'ggml-tiny.en.bin']
-
-    // Try different model directory locations
-    const modelDirs = [
-      // Development paths
-      path.join(__dirname, '../../whisper.cpp/models'),
-      // Production paths (app bundle)
-      path.join(process.resourcesPath, 'whisper.cpp/models'),
-      path.join(process.resourcesPath, 'app.asar.unpacked/whisper.cpp/models'),
-      // User data directory
-      path.join(require('electron').app.getPath('userData'), 'models'),
-      // System paths
-      '/opt/homebrew/share/whisper.cpp/models',
-      '/usr/local/share/whisper.cpp/models',
-    ]
-
-    for (const modelDir of modelDirs) {
-      for (const modelName of possibleModels) {
-        const modelPath = path.join(modelDir, modelName)
-        try {
-          await fs.access(modelPath, fs.constants.F_OK)
-          this.modelPath = modelPath
-          console.log(`Found model: ${modelName} at ${modelPath}`)
-          return
-        } catch (error) {
-          // Continue to next model/directory
-        }
-      }
-    }
-
-    throw new Error('No Whisper models found. Please download a model first.')
+    const { app } = require('electron')
+    this.modelPath = await ProcessUtils.findModel('WHISPER', __dirname, app.getPath('userData'))
   }
 
   /**
-   * Test the setup with a simple command
+   * Test setup - overrides BaseAIService.testSetup()
+   * EXACT COPY from original implementation
    */
   async testSetup() {
     // Skip the test since we know the binary and model exist
@@ -132,11 +45,10 @@ class WhisperCppService extends EventEmitter {
 
   /**
    * Process complete audio file
+   * PRESERVES EXACT FUNCTIONALITY from original
    */
   async processAudioFile(audioFilePath) {
-    if (!this.isInitialized) {
-      throw new Error('Whisper.cpp service not initialized')
-    }
+    this.ensureInitialized('processAudioFile')
 
     try {
       const result = await this.runWhisperCpp(audioFilePath, {
@@ -147,20 +59,19 @@ class WhisperCppService extends EventEmitter {
 
       return this.formatResult(result)
     } catch (error) {
-      console.error('Error processing audio file:', error)
+      this.handleError('processAudioFile', error)
       throw error
     }
   }
 
   /**
    * Process audio chunk for real-time transcription
+   * PRESERVES EXACT FUNCTIONALITY from original
    */
   async processAudioChunk(audioBuffer, sampleRate = 16000) {
-    if (!this.isInitialized) {
-      throw new Error('Whisper.cpp service not initialized')
-    }
+    this.ensureInitialized('processAudioChunk')
 
-    const requestId = ++this.requestId
+    const requestId = this.getNextRequestId()
 
     try {
       console.log(`Processing audio chunk ${requestId}:`, {
@@ -210,22 +121,19 @@ class WhisperCppService extends EventEmitter {
 
   /**
    * Write audio buffer to temporary WAV file
+   * Refactored to use AudioUtils
    */
   async writeAudioToTempFile(audioBuffer, sampleRate = 16000) {
-    const tempFile = path.join(this.tempDir, `whisper_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.wav`)
+    const tempFile = this.createTempFilePath('whisper', 'wav')
 
     try {
-      // Convert audio buffer to WAV format
-      const wavBuffer = this.createWavBuffer(audioBuffer, sampleRate)
+      // Convert audio buffer to WAV format using AudioUtils
+      const wavBuffer = AudioUtils.createWavBuffer(audioBuffer, sampleRate)
 
-      // Validate WAV buffer
-      if (wavBuffer.length < 44) {
-        throw new Error('Generated WAV buffer is too small')
-      }
-
-      // Check WAV header
-      if (wavBuffer.toString('ascii', 0, 4) !== 'RIFF') {
-        throw new Error('Invalid WAV header')
+      // Validate the generated WAV buffer
+      const validation = AudioUtils.validateWavBuffer(wavBuffer)
+      if (!validation.valid) {
+        throw new Error(`WAV validation failed: ${validation.error}`)
       }
 
       console.log(`Writing WAV file: ${tempFile}, size: ${wavBuffer.length} bytes`)
@@ -240,84 +148,15 @@ class WhisperCppService extends EventEmitter {
 
   /**
    * Create WAV buffer from audio data
+   * Delegated to AudioUtils for better maintainability
    */
   createWavBuffer(audioData, sampleRate = 16000) {
-    // Convert hex string to buffer if needed
-    let buffer
-    if (typeof audioData === 'string') {
-      buffer = Buffer.from(audioData, 'hex')
-    } else if (ArrayBuffer.isView(audioData)) {
-      // Handle TypedArray or DataView
-      buffer = Buffer.from(audioData.buffer || audioData)
-    } else if (audioData instanceof ArrayBuffer) {
-      buffer = Buffer.from(audioData)
-    } else {
-      buffer = Buffer.from(audioData)
-    }
-
-    // If the buffer is already a WAV file, return it
-    if (buffer.length > 12 && buffer.toString('ascii', 0, 4) === 'RIFF') {
-      return buffer
-    }
-
-    // Ensure we have valid PCM data
-    if (buffer.length === 0) {
-      throw new Error('Audio buffer is empty')
-    }
-
-    // Create WAV header for raw PCM data
-    const numChannels = 1 // Mono
-    const bitsPerSample = 16
-    const byteRate = (sampleRate * numChannels * bitsPerSample) / 8
-    const blockAlign = (numChannels * bitsPerSample) / 8
-
-    // Ensure buffer length is even (16-bit samples)
-    const dataSize = Math.floor(buffer.length / 2) * 2
-    const fileSize = 36 + dataSize
-
-    const wavHeader = Buffer.alloc(44)
-    let offset = 0
-
-    // RIFF header
-    wavHeader.write('RIFF', offset)
-    offset += 4
-    wavHeader.writeUInt32LE(fileSize, offset)
-    offset += 4
-    wavHeader.write('WAVE', offset)
-    offset += 4
-
-    // fmt chunk
-    wavHeader.write('fmt ', offset)
-    offset += 4
-    wavHeader.writeUInt32LE(16, offset)
-    offset += 4 // PCM chunk size
-    wavHeader.writeUInt16LE(1, offset)
-    offset += 2 // PCM format
-    wavHeader.writeUInt16LE(numChannels, offset)
-    offset += 2
-    wavHeader.writeUInt32LE(sampleRate, offset)
-    offset += 4
-    wavHeader.writeUInt32LE(byteRate, offset)
-    offset += 4
-    wavHeader.writeUInt16LE(blockAlign, offset)
-    offset += 2
-    wavHeader.writeUInt16LE(bitsPerSample, offset)
-    offset += 2
-
-    // data chunk
-    wavHeader.write('data', offset)
-    offset += 4
-    wavHeader.writeUInt32LE(dataSize, offset)
-
-    // Truncate buffer to even length if needed
-    const audioBuffer = buffer.slice(0, dataSize)
-
-    // Combine header and data
-    return Buffer.concat([wavHeader, audioBuffer])
+    return AudioUtils.createWavBuffer(audioData, sampleRate)
   }
 
   /**
    * Run Whisper.cpp with given options
+   * EXACT COPY from original implementation
    */
   async runWhisperCpp(audioFile, options = {}) {
     return new Promise((resolve, reject) => {
@@ -466,6 +305,7 @@ class WhisperCppService extends EventEmitter {
 
   /**
    * Parse plain text output from Whisper.cpp
+   * EXACT COPY from original implementation
    */
   parsePlainTextOutput(output) {
     const lines = output.trim().split('\n')
@@ -504,6 +344,7 @@ class WhisperCppService extends EventEmitter {
 
   /**
    * Parse timestamp string to seconds
+   * EXACT COPY from original implementation
    */
   parseTimestamp(timestamp) {
     const parts = timestamp.split(':')
@@ -516,6 +357,7 @@ class WhisperCppService extends EventEmitter {
 
   /**
    * Format result to match the expected format
+   * EXACT COPY from original implementation
    */
   formatResult(whisperResult) {
     console.log('Formatting Whisper.cpp result:', whisperResult)
@@ -570,11 +412,10 @@ class WhisperCppService extends EventEmitter {
 
   /**
    * Start streaming mode for real-time processing
+   * EXACT COPY from original implementation
    */
   async startStreaming() {
-    if (!this.isInitialized) {
-      throw new Error('Whisper.cpp service not initialized')
-    }
+    this.ensureInitialized('startStreaming')
 
     if (this.streamingProcess) {
       console.log('Streaming already started')
@@ -586,11 +427,11 @@ class WhisperCppService extends EventEmitter {
       this.modelPath,
       '--stream',
       '--step',
-      '3000', // 3 second steps
+      WHISPER_STREAMING.STEP_MS.toString(),
       '--length',
-      '5000', // 5 second context
+      WHISPER_STREAMING.CONTEXT_MS.toString(),
       '--audio-ctx',
-      '512',
+      WHISPER_STREAMING.AUDIO_CTX_SIZE.toString(),
       '--no-prints',
     ]
 
@@ -618,6 +459,7 @@ class WhisperCppService extends EventEmitter {
 
   /**
    * Stop streaming mode
+   * EXACT COPY from original implementation
    */
   async stopStreaming() {
     if (this.streamingProcess) {
@@ -628,6 +470,7 @@ class WhisperCppService extends EventEmitter {
 
   /**
    * Send audio data to streaming process
+   * EXACT COPY from original implementation
    */
   streamAudioChunk(audioBuffer) {
     if (this.streamingProcess && this.streamingProcess.stdin) {
@@ -636,26 +479,19 @@ class WhisperCppService extends EventEmitter {
   }
 
   /**
-   * Check if service is ready
-   */
-  isReady() {
-    return this.isInitialized && this.whisperBinary && this.modelPath
-  }
-
-  /**
-   * Get service status
+   * Get service status - enhanced with base class info
    */
   getStatus() {
+    const baseStatus = super.getStatus()
     return {
-      initialized: this.isInitialized,
+      ...baseStatus,
       whisperBinary: this.whisperBinary,
-      modelPath: this.modelPath,
       streaming: !!this.streamingProcess,
     }
   }
 
   /**
-   * Shutdown the service
+   * Shutdown the service - enhanced with streaming cleanup
    */
   async shutdown() {
     await this.stopStreaming()
@@ -663,8 +499,7 @@ class WhisperCppService extends EventEmitter {
     // Clean up any pending requests
     this.pendingRequests.clear()
 
-    this.isInitialized = false
-    console.log('Whisper.cpp service shutdown complete')
+    await super.shutdown()
   }
 }
 
