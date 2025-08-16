@@ -136,3 +136,4 @@ llama.cpp/
 # AI related
 cursor/
 docs/
+.claude/
