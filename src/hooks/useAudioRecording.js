@@ -270,6 +270,10 @@ const useAudioRecording = () => {
     console.log('=== saveRecording called ===')
     console.log('Audio data length:', allAudioDataRef.current.length)
 
+    // Get current agent mode state
+    const isAgentMode = window.useDictationStore ? window.useDictationStore.getState().isAgentMode : false
+    console.log('Agent mode enabled:', isAgentMode)
+
     if (allAudioDataRef.current.length === 0) {
       console.warn('No audio data to save')
       throw new Error('No audio data to save')
@@ -312,32 +316,61 @@ const useAudioRecording = () => {
           finalText = result.result.text.trim()
           console.log('Raw transcription:', finalText)
 
-          // AI refinement with Llama if available
-          if (
-            ENABLE_LLAMA_REFINEMENT &&
-            window.electronAPI.llamaRefineTranscript &&
-            finalText &&
-            finalText !== '[BLANK_AUDIO]'
-          ) {
+          // Branch processing based on mode
+          if (isAgentMode && finalText && finalText !== '[BLANK_AUDIO]') {
+            // Agent mode: Process as request and generate content
             try {
-              console.log('Refining text with LLaMA.cpp...', finalText)
-              const llamaResult = await window.electronAPI.llamaRefineTranscript(finalText)
-              console.log('LLaMA refinement result:', llamaResult)
+              console.log('Processing with Agent mode...', finalText)
+              const agentResult = await window.electronAPI.agentProcessRequest(finalText)
+              console.log('Agent processing result:', agentResult)
 
-              if (llamaResult.success && llamaResult.refinedTranscript && llamaResult.refinedTranscript.trim()) {
-                const originalText = finalText
-                finalText = llamaResult.refinedTranscript.trim()
-                console.log('Text refined successfully:')
-                console.log('  Original:', originalText)
-                console.log('  Refined: ', finalText)
+              if (agentResult.success && agentResult.generatedContent && agentResult.generatedContent.trim()) {
+                const originalTranscript = finalText
+                finalText = agentResult.generatedContent.trim()
+                console.log('Agent processing successful:')
+                console.log('  Original request:', originalTranscript)
+                console.log('  Generated content:', finalText.substring(0, 200) + (finalText.length > 200 ? '...' : ''))
               } else {
-                console.log('LLaMA refinement returned no useful result:', llamaResult)
-                if (llamaResult.error) {
-                  console.log('LLaMA error:', llamaResult.error)
+                console.log('Agent processing failed, using fallback content')
+                if (agentResult.fallbackContent) {
+                  finalText = agentResult.fallbackContent.trim()
+                }
+                if (agentResult.error) {
+                  console.log('Agent error:', agentResult.error)
                 }
               }
-            } catch (refinementError) {
-              console.warn('LLaMA refinement failed, using original text:', refinementError.message)
+            } catch (agentError) {
+              console.warn('Agent processing failed, using original transcription:', agentError.message)
+              // Keep original transcription as fallback
+            }
+          } else if (!isAgentMode) {
+            // Normal mode: AI refinement with Llama if available
+            if (
+              ENABLE_LLAMA_REFINEMENT &&
+              window.electronAPI.llamaRefineTranscript &&
+              finalText &&
+              finalText !== '[BLANK_AUDIO]'
+            ) {
+              try {
+                console.log('Refining text with LLaMA.cpp...', finalText)
+                const llamaResult = await window.electronAPI.llamaRefineTranscript(finalText)
+                console.log('LLaMA refinement result:', llamaResult)
+
+                if (llamaResult.success && llamaResult.refinedTranscript && llamaResult.refinedTranscript.trim()) {
+                  const originalText = finalText
+                  finalText = llamaResult.refinedTranscript.trim()
+                  console.log('Text refined successfully:')
+                  console.log('  Original:', originalText)
+                  console.log('  Refined: ', finalText)
+                } else {
+                  console.log('LLaMA refinement returned no useful result:', llamaResult)
+                  if (llamaResult.error) {
+                    console.log('LLaMA error:', llamaResult.error)
+                  }
+                }
+              } catch (refinementError) {
+                console.warn('LLaMA refinement failed, using original text:', refinementError.message)
+              }
             }
           }
         }

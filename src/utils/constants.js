@@ -35,6 +35,12 @@ export const DICTATION_STATES = {
   ERROR: 'error',
 }
 
+// Dictation Modes
+export const DICTATION_MODES = {
+  NORMAL: 'normal',
+  AGENT: 'agent',
+}
+
 // UI Constants
 export const UI_CONSTANTS = {
   COLORS: {
@@ -94,6 +100,7 @@ export const SETTINGS_KEYS = {
   AUTO_COPY_ON_COMPLETION: 'auto_copy_on_completion',
   WINDOW_POSITION: 'window_position',
   WINDOW_SIZE: 'window_size',
+  AGENT_MODE_ENABLED: 'agent_mode_enabled',
 }
 
 // Default Settings
@@ -109,6 +116,7 @@ export const DEFAULT_SETTINGS = {
   [SETTINGS_KEYS.AUTO_COPY_ON_COMPLETION]: false,
   [SETTINGS_KEYS.WINDOW_POSITION]: { x: 100, y: 100 },
   [SETTINGS_KEYS.WINDOW_SIZE]: { width: 600, height: 400 },
+  [SETTINGS_KEYS.AGENT_MODE_ENABLED]: false,
 }
 
 // Audio Processing Constants
@@ -123,7 +131,7 @@ export const AUDIO_CONFIG = {
 // Global Shortcuts
 export const GLOBAL_SHORTCUTS = {
   TOGGLE_DICTATION: 'CmdOrCtrl+Shift+D',
-  TOGGLE_RECORDING: 'CmdOrCtrl+Shift+S',
+  TOGGLE_AGENT_MODE: 'CmdOrCtrl+Shift+S',
   COPY_TRANSCRIPTION: 'CmdOrCtrl+Shift+C',
   SHOW_HIDE_APP: 'CmdOrCtrl+Shift+H',
 }

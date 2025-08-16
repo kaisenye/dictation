@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 
-const SoundWaveVisualizer = ({ audioLevel = 0, isRecording = false, className = '' }) => {
+const SoundWaveVisualizer = ({ audioLevel = 0, isRecording = false, isAgentMode = false, className = '' }) => {
   const canvasRef = useRef(null)
   const animationRef = useRef(null)
   const barsRef = useRef([])
@@ -64,15 +64,29 @@ const SoundWaveVisualizer = ({ audioLevel = 0, isRecording = false, className = 
         const barHeight = Math.min(bar.height, MAX_HEIGHT)
 
         if (isRecording) {
-          // Simple white color when recording
-          ctx.fillStyle = '#ffffff'
+          if (isAgentMode) {
+            // Green color when recording in agent mode
+            ctx.fillStyle = '#9ae600' // green-500
+          } else {
+            // White color when recording in normal mode
+            ctx.fillStyle = '#ffffff'
+          }
         } else {
-          // Subtle gray gradient when idle
-          const gradient = ctx.createLinearGradient(0, centerY - barHeight / 2, 0, centerY + barHeight / 2)
-          gradient.addColorStop(0, '#9ca3af')
-          gradient.addColorStop(0.5, '#6b7280')
-          gradient.addColorStop(1, '#4b5563')
-          ctx.fillStyle = gradient
+          if (isAgentMode) {
+            // Green gradient when idle in agent mode
+            const gradient = ctx.createLinearGradient(0, centerY - barHeight / 2, 0, centerY + barHeight / 2)
+            gradient.addColorStop(0, '#a3e635') // lime-400
+            gradient.addColorStop(0.5, '#84cc16') // lime-500
+            gradient.addColorStop(1, '#65a30d') // lime-600
+            ctx.fillStyle = gradient
+          } else {
+            // Gray gradient when idle in normal mode
+            const gradient = ctx.createLinearGradient(0, centerY - barHeight / 2, 0, centerY + barHeight / 2)
+            gradient.addColorStop(0, '#9ca3af')
+            gradient.addColorStop(0.5, '#6b7280')
+            gradient.addColorStop(1, '#4b5563')
+            ctx.fillStyle = gradient
+          }
         }
         ctx.fillRect(x, centerY - barHeight / 2, BAR_WIDTH, barHeight)
       })
@@ -87,7 +101,7 @@ const SoundWaveVisualizer = ({ audioLevel = 0, isRecording = false, className = 
         cancelAnimationFrame(animationRef.current)
       }
     }
-  }, [audioLevel, isRecording])
+  }, [audioLevel, isRecording, isAgentMode])
 
   return (
     <div className={`flex items-center justify-center rounded-full ${className}`}>
