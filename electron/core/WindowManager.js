@@ -76,7 +76,8 @@ class WindowManager {
    */
   createWindow() {
     const isDev = process.env.IS_DEV === 'true'
-    
+    const { app } = require('electron')
+
     // Create the browser window - tiny pill that expands during recording
     this.mainWindow = new BrowserWindow({
       width: WINDOW_CONFIG.PILL.WIDTH, // Was: 60
@@ -89,7 +90,9 @@ class WindowManager {
         nodeIntegration: false,
         contextIsolation: true,
         enableRemoteModule: false,
-        preload: path.join(__dirname, '../preload.js'),
+        preload: isDev
+          ? path.join(__dirname, '..', 'preload.js')
+          : path.join(app.getAppPath(), 'dist-electron', 'preload.js'),
         webSecurity: true,
       },
       show: false, // Don't show until ready
@@ -109,22 +112,23 @@ class WindowManager {
       roundedCorners: true, // Enable rounded corners for pill shape
     })
 
+    // TODO: add it back if needed
     // Set Content Security Policy
-    this.mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-      callback({
-        responseHeaders: {
-          ...details.responseHeaders,
-          'Content-Security-Policy': [
-            `default-src ${CSP.DEFAULT_SRC}; ` +
-              `script-src ${CSP.SCRIPT_SRC}; ` +
-              `style-src ${CSP.STYLE_SRC}; ` +
-              `font-src ${CSP.FONT_SRC}; ` +
-              `img-src ${CSP.IMG_SRC}; ` +
-              `connect-src ${CSP.CONNECT_SRC};`,
-          ],
-        },
-      })
-    })
+    // this.mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    //   callback({
+    //     responseHeaders: {
+    //       ...details.responseHeaders,
+    //       'Content-Security-Policy': [
+    //         `default-src ${CSP.DEFAULT_SRC}; ` +
+    //           `script-src ${CSP.SCRIPT_SRC}; ` +
+    //           `style-src ${CSP.STYLE_SRC}; ` +
+    //           `font-src ${CSP.FONT_SRC}; ` +
+    //           `img-src ${CSP.IMG_SRC}; ` +
+    //           `connect-src ${CSP.CONNECT_SRC};`,
+    //       ],
+    //     },
+    //   })
+    // })
 
     // Load the app
     if (isDev) {
@@ -132,7 +136,14 @@ class WindowManager {
       // Open dev tools for debugging
       this.mainWindow.webContents.openDevTools()
     } else {
-      this.mainWindow.loadFile(path.join(__dirname, APP_CONFIG.DIST_PATH)) // Was: '../dist/index.html'
+      const filePath = path.join(app.getAppPath(), 'dist', 'index.html')
+      console.log('Loading file from:', filePath)
+      console.log('App path:', app.getAppPath())
+      this.mainWindow.loadFile(filePath)
+
+      // Enable dev tools in production for debugging
+      // TODO: Remove this in production
+      this.mainWindow.webContents.openDevTools()
     }
 
     // Show window when ready to prevent visual flash
@@ -177,23 +188,17 @@ class WindowManager {
     const position = this.getBottomCenterPosition()
     const fromSize = {
       width: 50, // Start width
-      height: WINDOW_CONFIG.PILL.HEIGHT
+      height: WINDOW_CONFIG.PILL.HEIGHT,
     }
     const toSize = {
       width: WINDOW_CONFIG.EXPANDED.WIDTH,
-      height: WINDOW_CONFIG.EXPANDED.HEIGHT
+      height: WINDOW_CONFIG.EXPANDED.HEIGHT,
     }
 
-    return await AnimationUtils.expandWindow(
-      this.mainWindow,
-      fromSize,
-      toSize,
-      position,
-      {
-        duration: WINDOW_CONFIG.ANIMATION.EXPAND_DURATION,
-        steps: WINDOW_CONFIG.ANIMATION.EXPAND_STEPS
-      }
-    )
+    return await AnimationUtils.expandWindow(this.mainWindow, fromSize, toSize, position, {
+      duration: WINDOW_CONFIG.ANIMATION.EXPAND_DURATION,
+      steps: WINDOW_CONFIG.ANIMATION.EXPAND_STEPS,
+    })
   }
 
   /**
@@ -209,19 +214,13 @@ class WindowManager {
     const currentBounds = this.mainWindow.getBounds()
     const targetSize = {
       width: WINDOW_CONFIG.PILL.WIDTH,
-      height: WINDOW_CONFIG.PILL.HEIGHT
+      height: WINDOW_CONFIG.PILL.HEIGHT,
     }
 
-    return await AnimationUtils.shrinkWindow(
-      this.mainWindow,
-      currentBounds,
-      targetSize,
-      targetPosition,
-      {
-        duration: WINDOW_CONFIG.ANIMATION.SHRINK_DURATION,
-        steps: WINDOW_CONFIG.ANIMATION.SHRINK_STEPS
-      }
-    )
+    return await AnimationUtils.shrinkWindow(this.mainWindow, currentBounds, targetSize, targetPosition, {
+      duration: WINDOW_CONFIG.ANIMATION.SHRINK_DURATION,
+      steps: WINDOW_CONFIG.ANIMATION.SHRINK_STEPS,
+    })
   }
 
   /**

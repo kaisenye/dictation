@@ -10,12 +10,14 @@ const IPCRouter = require('./core/IPCRouter')
 const ShortcutManager = require('./core/ShortcutManager')
 const TrayManager = require('./core/TrayManager')
 const PermissionManager = require('./core/PermissionManager')
+const AutoUpdater = require('./core/AutoUpdater')
 
 // Initialize managers
 const windowManager = new WindowManager()
 const ipcRouter = new IPCRouter(windowManager, whisperCppService, llamaCppService)
 const shortcutManager = new ShortcutManager(windowManager)
 const trayManager = new TrayManager(windowManager, whisperCppService, llamaCppService)
+const autoUpdater = new AutoUpdater(windowManager)
 
 /**
  * Create application menu for macOS
@@ -29,6 +31,13 @@ function createMenu() {
         {
           label: 'About Romo',
           role: 'about',
+        },
+        { type: 'separator' },
+        {
+          label: 'Check for Updates...',
+          click: () => {
+            autoUpdater.checkForUpdatesManually()
+          },
         },
         { type: 'separator' },
         {
@@ -181,6 +190,11 @@ app.whenReady().then(async () => {
         }
       }
     })
+
+    // Check for updates after initialization
+    setTimeout(() => {
+      autoUpdater.checkForUpdates()
+    }, 3000) // Wait 3 seconds after app starts
 
     console.log('App initialization completed successfully')
   } catch (error) {

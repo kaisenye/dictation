@@ -17,6 +17,35 @@ class ProcessUtils {
   static async findBinary(serviceName, baseDir) {
     const possiblePaths = BINARY_PATHS[serviceName]
 
+    // In production, check app resources first
+    const isDev = process.env.IS_DEV === 'true'
+    if (!isDev) {
+      const { app } = require('electron')
+      const resourcesPath = process.resourcesPath || app.getAppPath()
+
+      // Check production resource paths first
+      const productionPaths =
+        serviceName === 'WHISPER'
+          ? [
+              path.join(resourcesPath, 'whisper.cpp', 'build', 'bin', 'whisper-cli'),
+              path.join(resourcesPath, 'whisper.cpp', 'build', 'bin', 'main'),
+            ]
+          : [
+              path.join(resourcesPath, 'llama.cpp', 'build', 'bin', 'llama-server'),
+              path.join(resourcesPath, 'llama.cpp', 'build', 'bin', 'llama-cli'),
+            ]
+
+      for (const binaryPath of productionPaths) {
+        try {
+          await fs.access(binaryPath, fs.constants.F_OK | fs.constants.X_OK)
+          console.log(`Found ${serviceName} binary in resources: ${binaryPath}`)
+          return binaryPath
+        } catch (error) {
+          // Continue to next path
+        }
+      }
+    }
+
     for (const relativePath of possiblePaths) {
       let binaryPath
 
@@ -91,16 +120,35 @@ class ProcessUtils {
    * @returns {Promise<string>} - Path to found model
    */
   static async findModel(serviceName, baseDir, userDataPath) {
-    const modelDirs = MODEL_PATHS[serviceName].map((modelDir) => {
-      if (modelDir === 'models') {
-        // Special case: user data directory
-        return path.join(userDataPath, 'models')
-      } else if (path.isAbsolute(modelDir)) {
-        return modelDir
+    // In production, check app resources first
+    const isDev = process.env.IS_DEV === 'true'
+    let modelDirs = []
+
+    if (!isDev) {
+      const { app } = require('electron')
+      const resourcesPath = process.resourcesPath || app.getAppPath()
+
+      // Add production resource paths first
+      if (serviceName === 'WHISPER') {
+        modelDirs.push(path.join(resourcesPath, 'whisper.cpp', 'models'))
       } else {
-        return path.join(baseDir, modelDir)
+        modelDirs.push(path.join(resourcesPath, 'llama.cpp', 'models'))
       }
-    })
+    }
+
+    // Add standard model directories
+    modelDirs.push(
+      ...MODEL_PATHS[serviceName].map((modelDir) => {
+        if (modelDir === 'models') {
+          // Special case: user data directory
+          return path.join(userDataPath, 'models')
+        } else if (path.isAbsolute(modelDir)) {
+          return modelDir
+        } else {
+          return path.join(baseDir, modelDir)
+        }
+      })
+    )
 
     // Add production paths for packaged app
     if (process.resourcesPath) {
