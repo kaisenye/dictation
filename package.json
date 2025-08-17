@@ -88,10 +88,53 @@
         ]
       },
       {
+        "from": "whisper.cpp/build/src/",
+        "to": "whisper.cpp/build/src/",
+        "filter": [
+          "*.dylib"
+        ]
+      },
+      {
+        "from": "whisper.cpp/build/ggml/src/",
+        "to": "whisper.cpp/build/ggml/src/",
+        "filter": [
+          "*.dylib"
+        ]
+      },
+      {
+        "from": "whisper.cpp/build/ggml/src/ggml-blas/",
+        "to": "whisper.cpp/build/ggml/src/ggml-blas/",
+        "filter": [
+          "*.dylib"
+        ]
+      },
+      {
+        "from": "whisper.cpp/build/ggml/src/ggml-metal/",
+        "to": "whisper.cpp/build/ggml/src/ggml-metal/",
+        "filter": [
+          "*.dylib"
+        ]
+      },
+      {
         "from": "whisper.cpp/models/",
         "to": "whisper.cpp/models/",
         "filter": [
           "*.bin"
+        ]
+      },
+      {
+        "from": "llama.cpp/build/bin/",
+        "to": "llama.cpp/build/bin/",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "llama.cpp/models/",
+        "to": "llama.cpp/models/",
+        "filter": [
+          "phi-2.Q4_K_M.gguf",
+          "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
         ]
       }
     ],
