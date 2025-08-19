@@ -10,9 +10,18 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
+    rollupOptions: {
+      input: {
+        main: './index.html',
+        dashboard: './public/dashboard.html',
+      },
+    },
   },
   plugins: [
-    react(),
+    react({
+      // Exclude dashboard from React refresh to avoid preamble issues
+      exclude: [/dashboard\.jsx$/, /\/public\/dashboard\.html$/]
+    }),
     electron([
       {
         // Main process entry point
@@ -55,71 +64,13 @@ export default defineConfig({
     // Plugin to copy database and services files
     {
       name: 'copy-electron-files',
+      buildStart() {
+        // Copy files on build start (dev mode)
+        copyElectronFiles()
+      },
       generateBundle() {
-        // Helper function to copy files recursively
-        function copyFileRecursive(source, target) {
-          if (!fs.existsSync(source)) {
-            console.warn(`Source directory does not exist: ${source}`)
-            return
-          }
-
-          const stats = fs.statSync(source)
-
-          if (stats.isDirectory()) {
-            if (!fs.existsSync(target)) {
-              fs.mkdirSync(target, { recursive: true })
-            }
-
-            const files = fs.readdirSync(source)
-            files.forEach((file) => {
-              const sourcePath = path.join(source, file)
-              const targetPath = path.join(target, file)
-              copyFileRecursive(sourcePath, targetPath)
-            })
-          } else {
-            // Only copy regular files, not sockets or other special files
-            if (stats.isFile()) {
-              const targetDir = path.dirname(target)
-              if (!fs.existsSync(targetDir)) {
-                fs.mkdirSync(targetDir, { recursive: true })
-              }
-              fs.copyFileSync(source, target)
-              console.log(`Copied: ${source} -> ${target}`)
-            }
-          }
-        }
-
-        // Copy database directory
-        const dbSourceDir = path.join(__dirname, 'electron', 'database')
-        const dbTargetDir = path.join(__dirname, 'dist-electron', 'database')
-
-        if (fs.existsSync(dbSourceDir)) {
-          copyFileRecursive(dbSourceDir, dbTargetDir)
-        }
-
-        // Copy services directory
-        const servicesSourceDir = path.join(__dirname, 'electron', 'services')
-        const servicesTargetDir = path.join(__dirname, 'dist-electron', 'services')
-
-        if (fs.existsSync(servicesSourceDir)) {
-          copyFileRecursive(servicesSourceDir, servicesTargetDir)
-        }
-
-        // Copy utils directory
-        const utilsSourceDir = path.join(__dirname, 'electron', 'utils')
-        const utilsTargetDir = path.join(__dirname, 'dist-electron', 'utils')
-
-        if (fs.existsSync(utilsSourceDir)) {
-          copyFileRecursive(utilsSourceDir, utilsTargetDir)
-        }
-
-        // Copy core directory
-        const coreSourceDir = path.join(__dirname, 'electron', 'core')
-        const coreTargetDir = path.join(__dirname, 'dist-electron', 'core')
-
-        if (fs.existsSync(coreSourceDir)) {
-          copyFileRecursive(coreSourceDir, coreTargetDir)
-        }
+        // Copy files on build (production mode)
+        copyElectronFiles()
       },
     },
   ],
@@ -128,3 +79,71 @@ export default defineConfig({
   },
   clearScreen: false,
 })
+
+// Helper function to copy electron files
+function copyElectronFiles() {
+  // Helper function to copy files recursively
+  function copyFileRecursive(source, target) {
+    if (!fs.existsSync(source)) {
+      console.warn(`Source directory does not exist: ${source}`)
+      return
+    }
+
+    const stats = fs.statSync(source)
+
+    if (stats.isDirectory()) {
+      if (!fs.existsSync(target)) {
+        fs.mkdirSync(target, { recursive: true })
+      }
+
+      const files = fs.readdirSync(source)
+      files.forEach((file) => {
+        const sourcePath = path.join(source, file)
+        const targetPath = path.join(target, file)
+        copyFileRecursive(sourcePath, targetPath)
+      })
+    } else {
+      // Only copy regular files, not sockets or other special files
+      if (stats.isFile()) {
+        const targetDir = path.dirname(target)
+        if (!fs.existsSync(targetDir)) {
+          fs.mkdirSync(targetDir, { recursive: true })
+        }
+        fs.copyFileSync(source, target)
+        console.log(`Copied: ${source} -> ${target}`)
+      }
+    }
+  }
+
+  // Copy database directory
+  const dbSourceDir = path.join(__dirname, 'electron', 'database')
+  const dbTargetDir = path.join(__dirname, 'dist-electron', 'database')
+
+  if (fs.existsSync(dbSourceDir)) {
+    copyFileRecursive(dbSourceDir, dbTargetDir)
+  }
+
+  // Copy services directory
+  const servicesSourceDir = path.join(__dirname, 'electron', 'services')
+  const servicesTargetDir = path.join(__dirname, 'dist-electron', 'services')
+
+  if (fs.existsSync(servicesSourceDir)) {
+    copyFileRecursive(servicesSourceDir, servicesTargetDir)
+  }
+
+  // Copy utils directory
+  const utilsSourceDir = path.join(__dirname, 'electron', 'utils')
+  const utilsTargetDir = path.join(__dirname, 'dist-electron', 'utils')
+
+  if (fs.existsSync(utilsSourceDir)) {
+    copyFileRecursive(utilsSourceDir, utilsTargetDir)
+  }
+
+  // Copy core directory
+  const coreSourceDir = path.join(__dirname, 'electron', 'core')
+  const coreTargetDir = path.join(__dirname, 'dist-electron', 'core')
+
+  if (fs.existsSync(coreSourceDir)) {
+    copyFileRecursive(coreSourceDir, coreTargetDir)
+  }
+}

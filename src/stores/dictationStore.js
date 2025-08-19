@@ -8,6 +8,15 @@ const useDictationStore = create((set) => ({
   error: null,
   isWindowVisible: false,
   isAgentMode: false,
+  currentView: 'dictation', // 'dictation' or 'dashboard'
+  
+  // Dashboard settings
+  userPlan: 'Basic',
+  customInstructions: '',
+  apiKeys: {
+    openai: '',
+    claude: '',
+  },
 
   // Actions
   updateTranscription: (text) => {
@@ -42,6 +51,23 @@ const useDictationStore = create((set) => ({
 
   setAgentMode: (isAgentMode) => {
     set({ isAgentMode })
+  },
+
+  setCurrentView: (view) => {
+    set({ currentView: view })
+  },
+
+  updateCustomInstructions: (instructions) => {
+    set({ customInstructions: instructions })
+  },
+
+  updateApiKey: (provider, key) => {
+    set((state) => ({
+      apiKeys: {
+        ...state.apiKeys,
+        [provider]: key
+      }
+    }))
   },
 
   reset: () => {

@@ -6,6 +6,7 @@ const llamaCppService = require('./services/llamaCppService')
 
 // Import new modular components
 const WindowManager = require('./core/WindowManager')
+const DashboardWindowManager = require('./core/DashboardWindowManager')
 const IPCRouter = require('./core/IPCRouter')
 const ShortcutManager = require('./core/ShortcutManager')
 const TrayManager = require('./core/TrayManager')
@@ -14,9 +15,10 @@ const AutoUpdater = require('./core/AutoUpdater')
 
 // Initialize managers
 const windowManager = new WindowManager()
+const dashboardWindowManager = new DashboardWindowManager()
 const ipcRouter = new IPCRouter(windowManager, whisperCppService, llamaCppService)
 const shortcutManager = new ShortcutManager(windowManager)
-const trayManager = new TrayManager(windowManager, whisperCppService, llamaCppService)
+const trayManager = new TrayManager(windowManager, whisperCppService, llamaCppService, dashboardWindowManager)
 const autoUpdater = new AutoUpdater(windowManager)
 
 /**

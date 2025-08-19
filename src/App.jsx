@@ -1,9 +1,23 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import DictationView from './components/dictation/DictationView'
+import Dashboard from './components/dashboard/Dashboard'
 import useDictationStore from './stores/dictationStore'
 
 function App() {
   const { setWindowVisible } = useDictationStore()
+  const [isDashboard, setIsDashboard] = useState(false)
+
+  // Check URL hash for dashboard mode
+  useEffect(() => {
+    const checkHash = () => {
+      setIsDashboard(window.location.hash === '#dashboard')
+    }
+
+    checkHash()
+    window.addEventListener('hashchange', checkHash)
+
+    return () => window.removeEventListener('hashchange', checkHash)
+  }, [])
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -30,8 +44,8 @@ function App() {
           })
 
           window.electronAPI.onTrayOpenSettings(() => {
-            console.log('Tray settings clicked')
-            // TODO: Open settings
+            console.log('Tray dashboard clicked')
+            // Dashboard will be opened by the TrayManager in a separate window
           })
         }
 
@@ -44,6 +58,24 @@ function App() {
 
     initializeApp()
   }, [setWindowVisible])
+
+  // Show dashboard or dictation based on hash
+  if (isDashboard) {
+    return (
+      <div className="w-full h-screen">
+        <Dashboard
+          onClose={() => {
+            // Close the dashboard window
+            if (window.electronAPI?.closeDashboard) {
+              window.electronAPI.closeDashboard()
+            } else {
+              window.close()
+            }
+          }}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="w-full h-full">

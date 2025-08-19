@@ -9,11 +9,12 @@ const { ICON_PATHS, APP_CONFIG } = require('../utils/Constants.js')
  * PRESERVES EXACT FUNCTIONALITY from original main.js createTray()
  */
 class TrayManager {
-  constructor(windowManager, whisperService, llamaService) {
+  constructor(windowManager, whisperService, llamaService, dashboardWindowManager) {
     this.tray = null
     this.windowManager = windowManager
     this.whisperService = whisperService
     this.llamaService = llamaService
+    this.dashboardWindowManager = dashboardWindowManager
   }
 
   /**
@@ -49,8 +50,17 @@ class TrayManager {
 
     try {
       if (iconPath) {
-        this.tray = new Tray(iconPath)
-        console.log('Tray created successfully with icon')
+        // Create native image and resize for proper tray display
+        const icon = nativeImage.createFromPath(iconPath)
+
+        // Resize to appropriate tray icon size (24x24 for standard, 32x32 for retina)
+        const resizedIcon = icon.resize({ width: 24, height: 24 })
+
+        // Set as template image for better macOS integration
+        resizedIcon.setTemplateImage(true)
+
+        this.tray = new Tray(resizedIcon)
+        console.log('Tray created successfully with resized icon')
       } else {
         // Use a minimal template icon when no file is found
         const templateIcon = nativeImage.createEmpty()
@@ -76,13 +86,10 @@ class TrayManager {
         },
       },
       {
-        label: 'Settings',
+        label: 'Dashboard',
         click: async () => {
-          const mainWindow = this.windowManager.getWindow()
-          if (mainWindow) {
-            await this.windowManager.showWindowOnCurrentDesktop()
-            mainWindow.webContents.send('tray-open-settings')
-          }
+          // Open dashboard in separate window
+          this.dashboardWindowManager.showDashboard()
         },
       },
       { type: 'separator' },
@@ -107,15 +114,11 @@ class TrayManager {
     this.tray.setContextMenu(contextMenu)
     this.tray.setToolTip(APP_CONFIG.NAME) // Was: 'Romo'
 
-    // Handle tray icon click
+    // Handle tray icon click - always show app
     this.tray.on('click', async () => {
       const mainWindow = this.windowManager.getWindow()
       if (mainWindow) {
-        if (mainWindow.isVisible()) {
-          mainWindow.hide()
-        } else {
-          await this.windowManager.showWindowOnCurrentDesktop()
-        }
+        await this.windowManager.showWindowOnCurrentDesktop()
       }
     })
 

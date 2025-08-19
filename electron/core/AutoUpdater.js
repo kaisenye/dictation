@@ -110,7 +110,7 @@ class AutoUpdater {
 
   checkForUpdates() {
     // Only check for updates in production
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.IS_DEV === 'development') {
       log.info('Skipping update check in development mode')
       return
     }
