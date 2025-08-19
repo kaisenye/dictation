@@ -24,12 +24,14 @@ class DashboardWindowManager {
     const isDev = process.env.IS_DEV === 'true'
     const { app } = require('electron')
 
-    // Create a normal-sized window for the dashboard
+    // Create a normal-sized window for the dashboard with integrated title bar
     this.dashboardWindow = new BrowserWindow({
       width: 1200,
       height: 800,
       minWidth: 800,
       minHeight: 600,
+      maxWidth: 1200,
+      maxHeight: 800,
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -42,8 +44,8 @@ class DashboardWindowManager {
       show: false, // Don't show until ready
       icon: path.join(__dirname, '../../public/icon.png'),
       title: 'Dashboard - Romo',
-      titleBarStyle: 'default',
-      frame: true,
+      titleBarStyle: 'hiddenInset', // Integrate traffic lights with content
+      frame: false, // Remove default frame to have full control
       transparent: false,
       movable: true,
       hasShadow: true,
@@ -54,6 +56,8 @@ class DashboardWindowManager {
       maximizable: true,
       closable: true,
       center: true,
+      backgroundColor: '#ffffff', // Set background color
+      vibrancy: 'sidebar', // Add subtle vibrancy effect for macOS
     })
 
     // Load the dashboard HTML file
@@ -63,17 +67,17 @@ class DashboardWindowManager {
       console.log('Loading dashboard from:', dashboardUrl)
       this.dashboardWindow.loadURL(dashboardUrl)
     } else {
-      // In production, load the dashboard HTML file
-      const dashboardPath = path.join(app.getAppPath(), 'dist', 'dashboard.html')
-      console.log('Loading dashboard from:', dashboardPath)
-      this.dashboardWindow.loadFile(dashboardPath)
+      // In production, use main index.html with dashboard hash
+      const indexPath = path.join(app.getAppPath(), 'dist', 'index.html')
+      console.log('Loading dashboard from:', indexPath + '#dashboard')
+      this.dashboardWindow.loadFile(indexPath, { hash: 'dashboard' })
     }
 
     // Show window when ready
     this.dashboardWindow.once('ready-to-show', () => {
       this.dashboardWindow.show()
       this.dashboardWindow.focus()
-      
+
       // Open dev tools for debugging in development
       if (isDev) {
         this.dashboardWindow.webContents.openDevTools()

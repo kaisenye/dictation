@@ -11,17 +11,11 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     rollupOptions: {
-      input: {
-        main: './index.html',
-        dashboard: './public/dashboard.html',
-      },
+      input: './index.html',
     },
   },
   plugins: [
-    react({
-      // Exclude dashboard from React refresh to avoid preamble issues
-      exclude: [/dashboard\.jsx$/, /\/public\/dashboard\.html$/]
-    }),
+    react(),
     electron([
       {
         // Main process entry point
